@@ -8,11 +8,16 @@ type AuthState = {
   error: string | null;
 };
 
-// Default admin PIN is 123456
-const defaultUser: User = {
-  id: '1',
-  pin: '123456',
-};
+// Shared PIN for all users (123456)
+const SHARED_PIN = '123456';
+
+// Predefined users - all use the same PIN code
+const users: User[] = [
+  { id: '1', username: 'admin', pin: SHARED_PIN },
+  { id: '2', username: 'user1', pin: SHARED_PIN },
+  { id: '3', username: 'user2', pin: SHARED_PIN },
+  { id: '4', username: 'manager', pin: SHARED_PIN },
+];
 
 export const authAtom = atom<AuthState>({
   user: null,
@@ -23,25 +28,28 @@ export const authAtom = atom<AuthState>({
 
 export const loginAtom = atom(
   null,
-  (get, set, pin: string) => {
+  (get, set, formData: { username: string; pin: string }) => {
     set(authAtom, { ...get(authAtom), isLoading: true, error: null });
 
     // Simulate authentication delay
     setTimeout(() => {
-      if (pin === defaultUser.pin) {
+      // Find user by username
+      const user = users.find(u => u.username === formData.username);
+      
+      if (user && formData.pin === user.pin) {
         set(authAtom, {
-          user: defaultUser,
+          user,
           isAuthenticated: true,
           isLoading: false,
           error: null,
         });
         // Store auth state in session storage
-        sessionStorage.setItem('user', JSON.stringify(defaultUser));
+        sessionStorage.setItem('user', JSON.stringify(user));
       } else {
         set(authAtom, {
           ...get(authAtom),
           isLoading: false,
-          error: 'Invalid PIN. Please try again.',
+          error: 'Invalid username or PIN. Please try again.',
         });
       }
     }, 500);
@@ -84,3 +92,6 @@ export const initAuthAtom = atom(null, (_, set) => {
     }
   }
 });
+
+// Export users list for UI
+export const usersAtom = atom(users);

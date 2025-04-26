@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAtom } from 'jotai';
-import { authAtom, loginAtom, initAuthAtom } from '../store/auth';
+import { authAtom, loginAtom, initAuthAtom, usersAtom } from '../store/auth';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { TrendingUp } from 'lucide-react';
 
 const Login = () => {
+  const [username, setUsername] = useState('admin');
   const [pin, setPin] = useState('');
   const [auth] = useAtom(authAtom);
   const [, login] = useAtom(loginAtom);
   const [, initAuth] = useAtom(initAuthAtom);
+  const [users] = useAtom(usersAtom);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -27,7 +29,7 @@ const Login = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    login(pin);
+    login({ username, pin });
   };
 
   const handlePinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,7 +48,7 @@ const Login = () => {
             </div>
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Trading Terminal</h1>
-          <p className="mt-2 text-gray-600">Enter your PIN to access the system</p>
+          <p className="mt-2 text-gray-600">Enter your username and PIN to access the system</p>
         </div>
 
         <Card>
@@ -56,8 +58,31 @@ const Login = () => {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
+                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+                  Select User
+                </label>
+                <select
+                  id="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  {users.map(user => (
+                    <option key={user.id} value={user.username}>
+                      {user.username}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label htmlFor="pin" className="block text-sm font-medium text-gray-700 mb-1">
+                  6-digit PIN
+                </label>
                 <div className="relative">
                   <input
+                    id="pin"
                     type="password"
                     inputMode="numeric"
                     pattern="[0-9]*"
@@ -84,7 +109,7 @@ const Login = () => {
             </form>
             
             <div className="mt-4 text-sm text-gray-500 text-center">
-              <p>Default PIN: 123456</p>
+              <p>All users share the same PIN: 123456</p>
             </div>
           </CardContent>
         </Card>

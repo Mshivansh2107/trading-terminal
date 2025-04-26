@@ -15,6 +15,8 @@
       - `platform` (text)
       - `name` (text)
       - `contact_no` (text, optional)
+      - `user_id` (text, optional)
+      - `username` (text, optional)
       - `created_at` (timestamptz)
 
     - `purchases`
@@ -30,6 +32,8 @@
       - `platform` (text)
       - `name` (text)
       - `contact_no` (text, optional)
+      - `user_id` (text, optional)
+      - `username` (text, optional)
       - `created_at` (timestamptz)
 
     - `transfers`
@@ -37,6 +41,8 @@
       - `from_platform` (text)
       - `to_platform` (text)
       - `quantity` (numeric)
+      - `user_id` (text, optional)
+      - `username` (text, optional)
       - `created_at` (timestamptz)
 
   2. Security
@@ -58,6 +64,8 @@ CREATE TABLE IF NOT EXISTS sales (
   platform text NOT NULL,
   name text NOT NULL,
   contact_no text,
+  user_id text,
+  username text,
   created_at timestamptz DEFAULT now()
 );
 
@@ -89,6 +97,8 @@ CREATE TABLE IF NOT EXISTS purchases (
   platform text NOT NULL,
   name text NOT NULL,
   contact_no text,
+  user_id text,
+  username text,
   created_at timestamptz DEFAULT now()
 );
 
@@ -112,6 +122,8 @@ CREATE TABLE IF NOT EXISTS transfers (
   from_platform text NOT NULL,
   to_platform text NOT NULL,
   quantity numeric NOT NULL,
+  user_id text,
+  username text,
   created_at timestamptz DEFAULT now()
 );
 
