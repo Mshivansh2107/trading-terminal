@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAtom } from 'jotai';
 import { authAtom, initAuthAtom } from './store/auth';
-import { loadSupabaseDataAtom } from './store/data';
+import { refreshDataAtom } from './store/data';
 
 // Pages
 import Dashboard from './pages/dashboard';
@@ -29,17 +29,19 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 function App() {
   const [auth] = useAtom(authAtom);
   const [, initAuth] = useAtom(initAuthAtom);
-  const [, loadSupabaseData] = useAtom(loadSupabaseDataAtom);
+  const [, refreshData] = useAtom(refreshDataAtom);
   
   useEffect(() => {
     // Initialize auth state from session storage on app load
     initAuth();
-    
-    // Load data from Supabase
+  }, [initAuth]);
+  
+  useEffect(() => {
+    // Load data from Supabase when authenticated
     if (auth.isAuthenticated) {
-      loadSupabaseData();
+      refreshData().catch(err => console.error('Error refreshing data:', err));
     }
-  }, [initAuth, auth.isAuthenticated, loadSupabaseData]);
+  }, [auth.isAuthenticated, refreshData]);
   
   return (
     <Router>

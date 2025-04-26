@@ -81,6 +81,12 @@ export type DashboardData = {
 export type StatsData = {
   salesByDay: {
     date: string;
+    isoDate: string;
+    amount: number;
+  }[];
+  purchasesByDay: {
+    date: string;
+    isoDate: string;
     amount: number;
   }[];
   salesByBank: {

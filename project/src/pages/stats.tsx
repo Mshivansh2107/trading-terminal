@@ -28,41 +28,11 @@ const Stats = () => {
   // Generate pie chart colors
   const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
   
-  // Generate daily sales data for demo purposes (if no real data)
-  const salesByDayData = statsData.salesByDay.length > 0 ? statsData.salesByDay : [
-    { date: '01/05', amount: 25000 },
-    { date: '02/05', amount: 32000 },
-    { date: '03/05', amount: 28000 },
-    { date: '04/05', amount: 35000 },
-    { date: '05/05', amount: 40000 },
-    { date: '06/05', amount: 65000 },
-    { date: '07/05', amount: 78000 },
-    { date: '08/05', amount: 95000 },
-    { date: '09/05', amount: 65000 },
-    { date: '10/05', amount: 50000 },
-    { date: '11/05', amount: 55000 },
-    { date: '12/05', amount: 37000 },
-    { date: '13/05', amount: 24000 },
-    { date: '14/05', amount: 15000 },
-  ];
+  // Use sales data from the stats atom
+  const salesByDayData = statsData.salesByDay;
   
-  // Generate purchase by day data for demo purposes
-  const purchasesByDayData = [
-    { date: '01/05', amount: 21000 },
-    { date: '02/05', amount: 28000 },
-    { date: '03/05', amount: 23000 },
-    { date: '04/05', amount: 29000 },
-    { date: '05/05', amount: 37000 },
-    { date: '06/05', amount: 42000 },
-    { date: '07/05', amount: 59000 },
-    { date: '08/05', amount: 76000 },
-    { date: '09/05', amount: 55000 },
-    { date: '10/05', amount: 43000 },
-    { date: '11/05', amount: 40000 },
-    { date: '12/05', amount: 32000 },
-    { date: '13/05', amount: 21000 },
-    { date: '14/05', amount: 14000 },
-  ];
+  // Use purchases data from the stats atom
+  const purchasesByDayData = statsData.purchasesByDay;
   
   // Prepare data for margin over time chart
   const marginData = salesByDayData.map((item, index) => {
