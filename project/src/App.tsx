@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAtom } from 'jotai';
 import { authAtom, initAuthAtom } from './store/auth';
+import { loadSupabaseDataAtom } from './store/data';
 
 // Pages
 import Dashboard from './pages/dashboard';
@@ -28,11 +29,17 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 function App() {
   const [auth] = useAtom(authAtom);
   const [, initAuth] = useAtom(initAuthAtom);
+  const [, loadSupabaseData] = useAtom(loadSupabaseDataAtom);
   
   useEffect(() => {
     // Initialize auth state from session storage on app load
     initAuth();
-  }, [initAuth]);
+    
+    // Load data from Supabase
+    if (auth.isAuthenticated) {
+      loadSupabaseData();
+    }
+  }, [initAuth, auth.isAuthenticated, loadSupabaseData]);
   
   return (
     <Router>
