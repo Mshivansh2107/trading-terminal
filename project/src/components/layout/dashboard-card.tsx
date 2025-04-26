@@ -10,6 +10,7 @@ interface DashboardCardProps {
   className?: string;
   valueClassName?: string;
   trend?: 'up' | 'down' | 'neutral';
+  icon?: React.ReactNode;
 }
 
 const DashboardCard: React.FC<DashboardCardProps> = ({
@@ -20,11 +21,15 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
   className,
   valueClassName,
   trend,
+  icon,
 }) => {
   return (
     <Card className={cn("shadow-sm hover:shadow transition-all", className)}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <div className="flex items-center gap-2">
+          {icon && <div className="flex-shrink-0">{icon}</div>}
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        </div>
         {trend && (
           <div className={cn(
             "p-1 rounded-full",

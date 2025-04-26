@@ -22,11 +22,17 @@ export const salesAtom = atomWithStorage<SalesEntry[]>('salesData', []);
 export const purchasesAtom = atomWithStorage<PurchaseEntry[]>('purchasesData', []);
 export const transfersAtom = atomWithStorage<TransferEntry[]>('transfersData', []);
 
+// Settings
+export const settingsAtom = atomWithStorage('appSettings', {
+  requiredMargin: 3
+});
+
 // Computed data for dashboard
 export const dashboardDataAtom = atom<DashboardData>((get) => {
   const sales = get(salesAtom);
   const purchases = get(purchasesAtom);
   const transfers = get(transfersAtom);
+  const settings = get(settingsAtom);
   
   const netSales = calculateNetSales(sales);
   const netPurchases = calculateNetPurchases(purchases);
@@ -45,34 +51,67 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   ];
   
   // Calculate cash balances
-  const cashList = [
-    { bank: 'IDBI' as const, amount: 59235.12 },
-    { bank: 'INDUSIND SS' as const, amount: 0 },
-    { bank: 'HDFC CAA SS' as const, amount: 965 },
-    { bank: 'BOB SS' as const, amount: 11737 },
-    { bank: 'CANARA SS' as const, amount: 20000 },
-    { bank: 'HDFC SS' as const, amount: 0 },
-    { bank: 'INDUSIND BLYNK' as const, amount: 40000 },
-    { bank: 'PNB' as const, amount: 0 },
+  // In a real app, this would come from a database
+  const bankBalances = [
+    { bank: 'IDBI' as const, amount: sales.filter(s => s.bank === 'IDBI').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'IDBI').reduce((sum, p) => sum + p.totalPrice, 0) },
+    { bank: 'INDUSIND SS' as const, amount: sales.filter(s => s.bank === 'INDUSIND SS').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'INDUSIND SS').reduce((sum, p) => sum + p.totalPrice, 0) },
+    { bank: 'HDFC CAA SS' as const, amount: sales.filter(s => s.bank === 'HDFC CAA SS').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'HDFC CAA SS').reduce((sum, p) => sum + p.totalPrice, 0) },
+    { bank: 'BOB SS' as const, amount: sales.filter(s => s.bank === 'BOB SS').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'BOB SS').reduce((sum, p) => sum + p.totalPrice, 0) },
+    { bank: 'CANARA SS' as const, amount: sales.filter(s => s.bank === 'CANARA SS').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'CANARA SS').reduce((sum, p) => sum + p.totalPrice, 0) },
+    { bank: 'HDFC SS' as const, amount: sales.filter(s => s.bank === 'HDFC SS').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'HDFC SS').reduce((sum, p) => sum + p.totalPrice, 0) },
+    { bank: 'INDUSIND BLYNK' as const, amount: sales.filter(s => s.bank === 'INDUSIND BLYNK').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'INDUSIND BLYNK').reduce((sum, p) => sum + p.totalPrice, 0) },
+    { bank: 'PNB' as const, amount: sales.filter(s => s.bank === 'PNB').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'PNB').reduce((sum, p) => sum + p.totalPrice, 0) },
   ];
   
-  const totalCash = cashList.reduce((total, cash) => total + cash.amount, 0);
+  const totalCash = bankBalances.reduce((total, cash) => total + cash.amount, 0);
   const netCash = netSales - netPurchases;
   
+  // Calculate average prices from transactions
+  const salesTransactions = sales.length > 0 ? sales : [];
+  const purchaseTransactions = purchases.length > 0 ? purchases : [];
+  
+  // Calculate average sales price
+  const totalSalesQuantity = salesTransactions.reduce((sum, s) => sum + s.quantity, 0);
+  const totalSalesValue = salesTransactions.reduce((sum, s) => sum + s.totalPrice, 0);
+  const salesPriceRange = totalSalesQuantity > 0 
+    ? parseFloat((totalSalesValue / totalSalesQuantity).toFixed(2)) 
+    : 0;
+  
+  // Calculate average purchase price
+  const totalPurchaseQuantity = purchaseTransactions.reduce((sum, p) => sum + p.quantity, 0);
+  const totalPurchaseValue = purchaseTransactions.reduce((sum, p) => sum + p.totalPrice, 0);
+  const buyPriceRange = totalPurchaseQuantity > 0 
+    ? parseFloat((totalPurchaseValue / totalPurchaseQuantity).toFixed(2)) 
+    : 0;
+  
+  // Calculate values for alternative coins
+  const buyPriceRangeAlt = 0; // This would ideally come from a separate calculation
+  const requiredMargin = settings.requiredMargin;
+  
+  // Calculate net cash after sales started in POS
+  const posStartDate = new Date('2023-01-01'); // Replace with actual start date
+  const salesAfterPosStart = sales
+    .filter(s => new Date(s.createdAt) >= posStartDate)
+    .reduce((sum, s) => sum + s.totalPrice, 0);
+  const purchasesAfterPosStart = purchases
+    .filter(p => new Date(p.createdAt) >= posStartDate)
+    .reduce((sum, p) => sum + p.totalPrice, 0);
+  const netCashAfterSales = netCash - (salesAfterPosStart - purchasesAfterPosStart);
+  
   return {
-    salesPriceRange: 92.8,
+    salesPriceRange,
     totalCash,
-    totalCashAlt: 17613.32,
-    buyPriceRange: 88.80,
-    buyPriceRangeAlt: 4.225,
+    totalCashAlt: netCash * 0.07, // Example: 7% of net cash in alternative currency
+    buyPriceRange,
+    buyPriceRangeAlt,
     stockList,
-    cashList,
+    cashList: bankBalances,
     netSales,
     netPurchases,
     currentMargin,
-    requiredMargin: 3,
+    requiredMargin,
     netCash,
-    netCashAfterSales: netCash - 40965, // Example calculation
+    netCashAfterSales,
   };
 });
 
@@ -82,14 +121,32 @@ export const statsDataAtom = atom<StatsData>((get) => {
   const purchases = get(purchasesAtom);
   
   // Group sales by day
-  const salesByDay = sales.reduce((acc: {date: string, amount: number}[], sale) => {
-    const date = new Date(sale.createdAt).toLocaleDateString();
-    const existingDate = acc.find(item => item.date === date);
+  const salesByDay = sales.reduce((acc: {date: string, isoDate: string, amount: number}[], sale) => {
+    const date = new Date(sale.createdAt);
+    const dateString = date.toLocaleDateString();
+    const isoDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const existingDate = acc.find(item => item.date === dateString);
     
     if (existingDate) {
       existingDate.amount += sale.totalPrice;
     } else {
-      acc.push({ date, amount: sale.totalPrice });
+      acc.push({ date: dateString, isoDate, amount: sale.totalPrice });
+    }
+    
+    return acc;
+  }, []);
+  
+  // Group purchases by day
+  const purchasesByDay = purchases.reduce((acc: {date: string, isoDate: string, amount: number}[], purchase) => {
+    const date = new Date(purchase.createdAt);
+    const dateString = date.toLocaleDateString();
+    const isoDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const existingDate = acc.find(item => item.date === dateString);
+    
+    if (existingDate) {
+      existingDate.amount += purchase.totalPrice;
+    } else {
+      acc.push({ date: dateString, isoDate, amount: purchase.totalPrice });
     }
     
     return acc;
@@ -137,6 +194,7 @@ export const statsDataAtom = atom<StatsData>((get) => {
   
   return {
     salesByDay,
+    purchasesByDay,
     salesByBank,
     salesByPlatform,
     purchasesByBank,
@@ -178,7 +236,9 @@ export const addSaleAtom = atom(
           platform: saleWithId.platform,
           name: saleWithId.name,
           contact_no: saleWithId.contactNo,
-          created_at: saleWithId.createdAt.toISOString()
+          created_at: saleWithId.createdAt.toISOString(),
+          user_id: auth.user?.id || null,
+          username: auth.user?.username || null
         });
       
       if (error) {
@@ -224,7 +284,9 @@ export const addPurchaseAtom = atom(
           platform: purchaseWithId.platform,
           name: purchaseWithId.name,
           contact_no: purchaseWithId.contactNo,
-          created_at: purchaseWithId.createdAt.toISOString()
+          created_at: purchaseWithId.createdAt.toISOString(),
+          user_id: auth.user?.id || null,
+          username: auth.user?.username || null
         });
       
       if (error) {
@@ -262,7 +324,9 @@ export const addTransferAtom = atom(
           from_platform: transferWithId.from,
           to_platform: transferWithId.to,
           quantity: transferWithId.quantity,
-          created_at: transferWithId.createdAt.toISOString()
+          created_at: transferWithId.createdAt.toISOString(),
+          user_id: auth.user?.id || null,
+          username: auth.user?.username || null
         });
       
       if (error) {
@@ -276,8 +340,8 @@ export const addTransferAtom = atom(
   }
 );
 
-// Functions to load data from Supabase
-export const loadSupabaseDataAtom = atom(
+// Function to fetch all data from Supabase
+export const refreshDataAtom = atom(
   null,
   async (_, set) => {
     try {
