@@ -1,7 +1,9 @@
 /*
+key details:
   Add UPDATE policies to all transaction tables.
   This migration adds policies that allow authenticated users to update transactions.
   This supports the 'Functionality to edit any created sales purchase or transfer' requirement.
+
 */
 
 -- Add update policies for sales table
