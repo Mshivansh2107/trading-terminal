@@ -8,16 +8,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  db: {
-    schema: 'public'
-  },
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
-  }
-});
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Test the connection
 supabase.from('sales').select('*', { count: 'exact' })

@@ -28,7 +28,7 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="flex items-center gap-2">
           {icon && <div className="flex-shrink-0">{icon}</div>}
-          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
         </div>
         {trend && (
           <div className={cn(

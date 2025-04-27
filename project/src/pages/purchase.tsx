@@ -1,17 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useAtom } from 'jotai';
-import { purchasesAtom, addPurchaseAtom } from '../store/data';
+import { purchasesAtom, addPurchaseAtom, updatePurchaseAtom, deletePurchaseAtom } from '../store/data';
 import { formatCurrency, formatQuantity, formatDateTime, generateOrderNumber } from '../lib/utils';
 import DataTable from '../components/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import FormField from '../components/layout/form-field';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, PencilIcon, TrashIcon } from 'lucide-react';
+import EditTransactionModal from '../components/edit-transaction-modal';
+import { PurchaseEntry, Bank, Platform } from '../types';
 
 const Purchase = () => {
   const [purchases] = useAtom(purchasesAtom);
   const [, addPurchase] = useAtom(addPurchaseAtom);
+  const [, updatePurchase] = useAtom(updatePurchaseAtom);
+  const [, deletePurchase] = useAtom(deletePurchaseAtom);
   const [showForm, setShowForm] = useState(false);
+  const [editingPurchase, setEditingPurchase] = useState<PurchaseEntry | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -19,14 +25,14 @@ const Purchase = () => {
     const formData = new FormData(e.currentTarget);
     const newPurchase = {
       orderNumber: generateOrderNumber(),
-      bank: formData.get('bank') as string,
+      bank: formData.get('bank') as Bank,
       orderType: 'Buy' as const,
       assetType: formData.get('assetType') as string,
-      fiatType: formData.get('fiatType') as string,
+      fiatType: formData.get('fiatType') as 'INR' | 'USDT',
       totalPrice: parseFloat(formData.get('totalPrice') as string),
       price: parseFloat(formData.get('price') as string),
       quantity: parseFloat(formData.get('quantity') as string),
-      platform: formData.get('platform') as any,
+      platform: formData.get('platform') as Platform,
       name: formData.get('name') as string,
       time: new Date().toLocaleTimeString(),
       contactNo: formData.get('contactNo') as string || undefined,
@@ -37,7 +43,28 @@ const Purchase = () => {
     setShowForm(false);
   };
   
-  const columns = [
+  const handleEdit = (purchase: PurchaseEntry) => {
+    setEditingPurchase(purchase);
+    setIsEditModalOpen(true);
+  };
+  
+  const handleDelete = useCallback((purchase: PurchaseEntry) => {
+    if (window.confirm("Are you sure you want to delete this purchase?")) {
+      deletePurchase(purchase.id);
+      alert("Purchase deleted successfully");
+    }
+  }, [deletePurchase]);
+  
+  const handleSaveEdit = (updatedData: any) => {
+    updatePurchase({
+      ...updatedData,
+      // Ensure createdAt remains as a Date object
+      createdAt: new Date(updatedData.createdAt)
+    });
+    setEditingPurchase(null);
+  };
+  
+  const columns = useMemo(() => [
     { key: 'orderNumber', label: 'Order #' },
     { key: 'bank', label: 'Bank' },
     { key: 'platform', label: 'Platform' },
@@ -61,8 +88,24 @@ const Purchase = () => {
       key: 'createdAt', 
       label: 'Date & Time',
       formatter: (value: Date) => formatDateTime(new Date(value))
+    }
+  ], []);
+
+  // Add actions for the data table
+  const rowActions = useMemo(() => [
+    {
+      label: 'Edit',
+      icon: <PencilIcon className="h-4 w-4" />,
+      onClick: handleEdit,
+      variant: 'ghost' as const
     },
-  ];
+    {
+      label: 'Delete',
+      icon: <TrashIcon className="h-4 w-4" />,
+      onClick: handleDelete,
+      variant: 'ghost' as const
+    }
+  ], [handleEdit, handleDelete]);
   
   const platforms = [
     { value: 'BINANCE SS', label: 'BINANCE SS' },
@@ -94,7 +137,7 @@ const Purchase = () => {
   return (
     <div className="p-4 md:p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Purchase Terminal</h1>
+        <h1 className="text-2xl font-bold">Purchase Management</h1>
         <Button 
           onClick={() => setShowForm(!showForm)}
           className="flex items-center"
@@ -111,7 +154,15 @@ const Purchase = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit}>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  label="Bank"
+                  name="bank"
+                  type="select"
+                  required
+                  options={banks}
+                />
+                
                 <FormField
                   label="Platform"
                   name="platform"
@@ -121,20 +172,12 @@ const Purchase = () => {
                 />
                 
                 <FormField
-                  label="Bank"
-                  name="bank"
-                  type="select" 
-                  required
-                  options={banks}
-                />
-                
-                <FormField
                   label="Asset Type"
                   name="assetType"
-                  type="select"
                   required
-                  options={[{ value: 'USDT', label: 'USDT' }]}
-                  inputProps={{ defaultValue: 'USDT' }}
+                  inputProps={{ 
+                    placeholder: "Enter Asset Type"
+                  }}
                 />
                 
                 <FormField
@@ -143,12 +186,23 @@ const Purchase = () => {
                   type="select"
                   required
                   options={currencies}
-                  inputProps={{ defaultValue: 'INR' }}
+                />
+                
+                <FormField
+                  label="Total Price"
+                  name="totalPrice" 
+                  type="number"
+                  required
+                  inputProps={{ 
+                    step: "0.01",
+                    min: "0",
+                    placeholder: "Enter Total Price"
+                  }}
                 />
                 
                 <FormField
                   label="Price"
-                  name="price"
+                  name="price" 
                   type="number"
                   required
                   inputProps={{ 
@@ -171,28 +225,16 @@ const Purchase = () => {
                 />
                 
                 <FormField
-                  label="Total Price"
-                  name="totalPrice"
-                  type="number" 
-                  required
-                  inputProps={{ 
-                    step: "0.01",
-                    min: "0",
-                    placeholder: "Enter Total Price"
-                  }}
-                />
-                
-                <FormField
-                  label="Supplier Name"
+                  label="Name"
                   name="name"
                   required
                   inputProps={{ 
-                    placeholder: "Enter Supplier Name"
+                    placeholder: "Enter Name"
                   }}
                 />
                 
                 <FormField
-                  label="Contact Number"
+                  label="Contact No."
                   name="contactNo"
                   inputProps={{ 
                     placeholder: "Enter Contact Number (Optional)"
@@ -227,6 +269,7 @@ const Purchase = () => {
             columns={columns} 
             title="Purchase Transactions"
             csvFilename="purchases-data.csv"
+            rowActions={rowActions}
           />
         </div>
         
@@ -247,6 +290,19 @@ const Purchase = () => {
           </div>
         )}
       </div>
+      
+      {/* Edit Transaction Modal */}
+      {editingPurchase && (
+        <EditTransactionModal
+          open={isEditModalOpen}
+          onOpenChange={setIsEditModalOpen}
+          onSave={handleSaveEdit}
+          data={editingPurchase}
+          type="purchase"
+          platforms={platforms}
+          banks={banks}
+        />
+      )}
     </div>
   );
 };

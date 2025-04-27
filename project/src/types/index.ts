@@ -8,7 +8,7 @@ export type Platform = 'BINANCE SS' | 'BINANCE AS' | 'BYBIT SS' | 'BYBIT AS' | '
 
 export type Bank = 'IDBI' | 'INDUSIND SS' | 'HDFC CAA SS' | 'BOB SS' | 'CANARA SS' | 'HDFC SS' | 'INDUSIND BLYNK' | 'PNB';
 
-export type Currency = 'USDT' | 'INR';
+export type Currency = 'INR' | 'USDT';
 
 export type SalesEntry = {
   id: string;
@@ -52,6 +52,17 @@ export type TransferEntry = {
   createdAt: Date;
 }
 
+export type BankTransferEntry = {
+  id: string;
+  fromBank: string;
+  fromAccount: string;
+  toBank: string;
+  toAccount: string;
+  amount: number;
+  reference?: string;
+  createdAt: Date;
+};
+
 export type StockData = {
   platform: Platform;
   quantity: number;
@@ -60,6 +71,16 @@ export type StockData = {
 export type CashData = {
   bank: Bank;
   amount: number;
+}
+
+export type ExpenseEntry = {
+  id: string;
+  bank: Bank;
+  amount: number;
+  type: 'expense' | 'income';
+  category?: string;
+  description?: string;
+  createdAt: Date;
 }
 
 export type DashboardData = {
@@ -72,6 +93,8 @@ export type DashboardData = {
   cashList: CashData[];
   netSales: number;
   netPurchases: number;
+  netExpenses: number;
+  netIncomes: number;
   currentMargin: number;
   requiredMargin: number;
   netCash: number;
@@ -85,6 +108,16 @@ export type StatsData = {
     amount: number;
   }[];
   purchasesByDay: {
+    date: string;
+    isoDate: string;
+    amount: number;
+  }[];
+  expensesByDay: {
+    date: string;
+    isoDate: string;
+    amount: number;
+  }[];
+  incomesByDay: {
     date: string;
     isoDate: string;
     amount: number;
@@ -103,6 +136,14 @@ export type StatsData = {
   }[];
   purchasesByPlatform: {
     platform: Platform;
+    amount: number;
+  }[];
+  expensesByBank: {
+    bank: Bank;
+    amount: number;
+  }[];
+  incomesByBank: {
+    bank: Bank;
     amount: number;
   }[];
   cashDistribution: {
