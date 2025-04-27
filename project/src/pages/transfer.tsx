@@ -1,25 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useAtom } from 'jotai';
-import { transfersAtom, addTransferAtom } from '../store/data';
+import { transfersAtom, addTransferAtom, updateTransferAtom, deleteTransferAtom } from '../store/data';
 import { formatQuantity, formatDateTime } from '../lib/utils';
 import DataTable from '../components/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import FormField from '../components/layout/form-field';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, PencilIcon, TrashIcon } from 'lucide-react';
+import EditTransactionModal from '../components/edit-transaction-modal';
+import { TransferEntry, Platform } from '../types';
 
 const Transfer = () => {
   const [transfers] = useAtom(transfersAtom);
   const [, addTransfer] = useAtom(addTransferAtom);
+  const [, updateTransfer] = useAtom(updateTransferAtom);
+  const [, deleteTransfer] = useAtom(deleteTransferAtom);
   const [showForm, setShowForm] = useState(false);
+  const [editingTransfer, setEditingTransfer] = useState<TransferEntry | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     const formData = new FormData(e.currentTarget);
     const newTransfer = {
-      from: formData.get('from') as any,
-      to: formData.get('to') as any,
+      from: formData.get('from') as Platform,
+      to: formData.get('to') as Platform,
       quantity: parseFloat(formData.get('quantity') as string),
     };
     
@@ -28,7 +34,28 @@ const Transfer = () => {
     setShowForm(false);
   };
   
-  const columns = [
+  const handleEdit = (transfer: TransferEntry) => {
+    setEditingTransfer(transfer);
+    setIsEditModalOpen(true);
+  };
+  
+  const handleDelete = useCallback((transfer: TransferEntry) => {
+    if (window.confirm("Are you sure you want to delete this transfer?")) {
+      deleteTransfer(transfer.id);
+      alert("Transfer deleted successfully");
+    }
+  }, [deleteTransfer]);
+  
+  const handleSaveEdit = (updatedData: any) => {
+    updateTransfer({
+      ...updatedData,
+      // Ensure createdAt remains as a Date object
+      createdAt: new Date(updatedData.createdAt)
+    });
+    setEditingTransfer(null);
+  };
+  
+  const columns = useMemo(() => [
     { key: 'from', label: 'From Platform' },
     { key: 'to', label: 'To Platform' },
     { 
@@ -40,8 +67,24 @@ const Transfer = () => {
       key: 'createdAt', 
       label: 'Date & Time',
       formatter: (value: Date) => formatDateTime(new Date(value))
+    }
+  ], []);
+
+  // Add actions for the data table
+  const rowActions = useMemo(() => [
+    {
+      label: 'Edit',
+      icon: <PencilIcon className="h-4 w-4" />,
+      onClick: handleEdit,
+      variant: 'ghost' as const
     },
-  ];
+    {
+      label: 'Delete',
+      icon: <TrashIcon className="h-4 w-4" />,
+      onClick: handleDelete,
+      variant: 'ghost' as const
+    }
+  ], [handleEdit, handleDelete]);
   
   const platforms = [
     { value: 'BINANCE SS', label: 'BINANCE SS' },
@@ -53,29 +96,45 @@ const Transfer = () => {
     { value: 'KUCOIN SS', label: 'KUCOIN SS' },
     { value: 'KUCOIN AS', label: 'KUCOIN AS' },
   ];
-
-  // Calculate platform totals for display
-  const platformTotals = platforms.map(platform => {
-    const fromSum = transfers
-      .filter(t => t.from === platform.value)
-      .reduce((sum, t) => sum + t.quantity, 0);
+  
+  // Compute platform totals
+  const platformTotals = useMemo(() => {
+    const totals = new Map();
     
-    const toSum = transfers
-      .filter(t => t.to === platform.value)
-      .reduce((sum, t) => sum + t.quantity, 0);
+    // Initialize all platforms with zeros
+    platforms.forEach(platform => {
+      totals.set(platform.value, { platform: platform.value, from: 0, to: 0, net: 0 });
+    });
     
-    return {
-      platform: platform.value,
-      from: fromSum,
-      to: toSum,
-      net: toSum - fromSum
-    };
-  }).filter(p => p.from > 0 || p.to > 0);
+    // Calculate totals
+    transfers.forEach(transfer => {
+      // Update "from" platform
+      if (totals.has(transfer.from)) {
+        const fromData = totals.get(transfer.from);
+        fromData.from += transfer.quantity;
+        fromData.net -= transfer.quantity;
+        totals.set(transfer.from, fromData);
+      }
+      
+      // Update "to" platform
+      if (totals.has(transfer.to)) {
+        const toData = totals.get(transfer.to);
+        toData.to += transfer.quantity;
+        toData.net += transfer.quantity;
+        totals.set(transfer.to, toData);
+      }
+    });
+    
+    // Convert map to array and filter out empty platforms
+    return Array.from(totals.values())
+      .filter(item => item.from > 0 || item.to > 0)
+      .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+  }, [transfers, platforms]);
 
   return (
     <div className="p-4 md:p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Transfer Log</h1>
+        <h1 className="text-2xl font-bold">Transfer Management</h1>
         <Button 
           onClick={() => setShowForm(!showForm)}
           className="flex items-center"
@@ -147,6 +206,7 @@ const Transfer = () => {
               columns={columns} 
               title="Transfer Transactions"
               csvFilename="transfers-data.csv"
+              rowActions={rowActions}
             />
           </div>
         </div>
@@ -185,29 +245,16 @@ const Transfer = () => {
         </div>
       </div>
       
-      {platformTotals.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Stock Balance as per Log</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {platforms.map((platform, i) => {
-                const platformData = platformTotals.find(p => p.platform === platform.value);
-                const balance = platformData ? platformData.net : 0;
-                
-                return (
-                  <div key={i} className="bg-gray-50 p-3 rounded-md">
-                    <div className="text-sm text-gray-500">{platform.value}</div>
-                    <div className={`text-lg font-bold ${balance > 0 ? 'text-green-600' : balance < 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                      {formatQuantity(balance)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Edit Transaction Modal */}
+      {editingTransfer && (
+        <EditTransactionModal
+          open={isEditModalOpen}
+          onOpenChange={setIsEditModalOpen}
+          onSave={handleSaveEdit}
+          data={editingTransfer}
+          type="transfer"
+          platforms={platforms}
+        />
       )}
     </div>
   );

@@ -4,6 +4,8 @@ import {
   SalesEntry, 
   PurchaseEntry, 
   TransferEntry,
+  BankTransferEntry,
+  ExpenseEntry,
   DashboardData,
   StatsData
 } from '../types';
@@ -15,16 +17,20 @@ import {
   calculateBankTotal
 } from '../lib/utils';
 import { supabase } from '../lib/supabase';
-import { authAtom } from './auth';
+import { authStateAtom } from './supabaseAuth';
 
 // Initial data store
 export const salesAtom = atomWithStorage<SalesEntry[]>('salesData', []);
 export const purchasesAtom = atomWithStorage<PurchaseEntry[]>('purchasesData', []);
 export const transfersAtom = atomWithStorage<TransferEntry[]>('transfersData', []);
+export const bankTransfersAtom = atomWithStorage<BankTransferEntry[]>('bankTransfersData', []);
+export const expensesAtom = atomWithStorage<ExpenseEntry[]>('expensesData', []);
 
 // Settings
 export const settingsAtom = atomWithStorage('appSettings', {
-  requiredMargin: 3
+  requiredMargin: 3,
+  currentUsdPrice: 0,
+  salesPriceRange: 0
 });
 
 // Computed data for dashboard
@@ -32,10 +38,17 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   const sales = get(salesAtom);
   const purchases = get(purchasesAtom);
   const transfers = get(transfersAtom);
+  const expenses = get(expensesAtom);
   const settings = get(settingsAtom);
   
   const netSales = calculateNetSales(sales);
   const netPurchases = calculateNetPurchases(purchases);
+  const netExpenses = expenses
+    .filter(e => e.type === 'expense')
+    .reduce((total, e) => total + e.amount, 0);
+  const netIncomes = expenses
+    .filter(e => e.type === 'income')
+    .reduce((total, e) => total + e.amount, 0);
   const currentMargin = calculateMargin(netSales, netPurchases);
   
   // Calculate stock balances
@@ -50,39 +63,91 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
     { platform: 'KUCOIN SS' as const, quantity: calculateStockBalance(purchases, sales, transfers, 'KUCOIN SS') },
   ];
   
-  // Calculate cash balances
-  // In a real app, this would come from a database
+  // Calculate cash balances including expenses and incomes
   const bankBalances = [
-    { bank: 'IDBI' as const, amount: sales.filter(s => s.bank === 'IDBI').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'IDBI').reduce((sum, p) => sum + p.totalPrice, 0) },
-    { bank: 'INDUSIND SS' as const, amount: sales.filter(s => s.bank === 'INDUSIND SS').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'INDUSIND SS').reduce((sum, p) => sum + p.totalPrice, 0) },
-    { bank: 'HDFC CAA SS' as const, amount: sales.filter(s => s.bank === 'HDFC CAA SS').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'HDFC CAA SS').reduce((sum, p) => sum + p.totalPrice, 0) },
-    { bank: 'BOB SS' as const, amount: sales.filter(s => s.bank === 'BOB SS').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'BOB SS').reduce((sum, p) => sum + p.totalPrice, 0) },
-    { bank: 'CANARA SS' as const, amount: sales.filter(s => s.bank === 'CANARA SS').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'CANARA SS').reduce((sum, p) => sum + p.totalPrice, 0) },
-    { bank: 'HDFC SS' as const, amount: sales.filter(s => s.bank === 'HDFC SS').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'HDFC SS').reduce((sum, p) => sum + p.totalPrice, 0) },
-    { bank: 'INDUSIND BLYNK' as const, amount: sales.filter(s => s.bank === 'INDUSIND BLYNK').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'INDUSIND BLYNK').reduce((sum, p) => sum + p.totalPrice, 0) },
-    { bank: 'PNB' as const, amount: sales.filter(s => s.bank === 'PNB').reduce((sum, s) => sum + s.totalPrice, 0) - purchases.filter(p => p.bank === 'PNB').reduce((sum, p) => sum + p.totalPrice, 0) },
+    { bank: 'IDBI' as const, amount: 
+      sales.filter(s => s.bank === 'IDBI').reduce((sum, s) => sum + s.totalPrice, 0) -
+      purchases.filter(p => p.bank === 'IDBI').reduce((sum, p) => sum + p.totalPrice, 0) +
+      expenses.filter(e => e.bank === 'IDBI' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
+      expenses.filter(e => e.bank === 'IDBI' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
+    },
+    { bank: 'INDUSIND SS' as const, amount: 
+      sales.filter(s => s.bank === 'INDUSIND SS').reduce((sum, s) => sum + s.totalPrice, 0) -
+      purchases.filter(p => p.bank === 'INDUSIND SS').reduce((sum, p) => sum + p.totalPrice, 0) +
+      expenses.filter(e => e.bank === 'INDUSIND SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
+      expenses.filter(e => e.bank === 'INDUSIND SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
+    },
+    { bank: 'HDFC CAA SS' as const, amount: 
+      sales.filter(s => s.bank === 'HDFC CAA SS').reduce((sum, s) => sum + s.totalPrice, 0) -
+      purchases.filter(p => p.bank === 'HDFC CAA SS').reduce((sum, p) => sum + p.totalPrice, 0) +
+      expenses.filter(e => e.bank === 'HDFC CAA SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
+      expenses.filter(e => e.bank === 'HDFC CAA SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
+    },
+    { bank: 'BOB SS' as const, amount: 
+      sales.filter(s => s.bank === 'BOB SS').reduce((sum, s) => sum + s.totalPrice, 0) -
+      purchases.filter(p => p.bank === 'BOB SS').reduce((sum, p) => sum + p.totalPrice, 0) +
+      expenses.filter(e => e.bank === 'BOB SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
+      expenses.filter(e => e.bank === 'BOB SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
+    },
+    { bank: 'CANARA SS' as const, amount: 
+      sales.filter(s => s.bank === 'CANARA SS').reduce((sum, s) => sum + s.totalPrice, 0) -
+      purchases.filter(p => p.bank === 'CANARA SS').reduce((sum, p) => sum + p.totalPrice, 0) +
+      expenses.filter(e => e.bank === 'CANARA SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
+      expenses.filter(e => e.bank === 'CANARA SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
+    },
+    { bank: 'HDFC SS' as const, amount: 
+      sales.filter(s => s.bank === 'HDFC SS').reduce((sum, s) => sum + s.totalPrice, 0) -
+      purchases.filter(p => p.bank === 'HDFC SS').reduce((sum, p) => sum + p.totalPrice, 0) +
+      expenses.filter(e => e.bank === 'HDFC SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
+      expenses.filter(e => e.bank === 'HDFC SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
+    },
+    { bank: 'INDUSIND BLYNK' as const, amount: 
+      sales.filter(s => s.bank === 'INDUSIND BLYNK').reduce((sum, s) => sum + s.totalPrice, 0) -
+      purchases.filter(p => p.bank === 'INDUSIND BLYNK').reduce((sum, p) => sum + p.totalPrice, 0) +
+      expenses.filter(e => e.bank === 'INDUSIND BLYNK' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
+      expenses.filter(e => e.bank === 'INDUSIND BLYNK' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
+    },
+    { bank: 'PNB' as const, amount: 
+      sales.filter(s => s.bank === 'PNB').reduce((sum, s) => sum + s.totalPrice, 0) -
+      purchases.filter(p => p.bank === 'PNB').reduce((sum, p) => sum + p.totalPrice, 0) +
+      expenses.filter(e => e.bank === 'PNB' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
+      expenses.filter(e => e.bank === 'PNB' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
+    },
   ];
   
   const totalCash = bankBalances.reduce((total, cash) => total + cash.amount, 0);
-  const netCash = netSales - netPurchases;
+  const netCash = netSales - netPurchases + netIncomes - netExpenses;
   
   // Calculate average prices from transactions
   const salesTransactions = sales.length > 0 ? sales : [];
   const purchaseTransactions = purchases.length > 0 ? purchases : [];
   
-  // Calculate average sales price
+  // Calculate average sales price, respecting manual override
   const totalSalesQuantity = salesTransactions.reduce((sum, s) => sum + s.quantity, 0);
   const totalSalesValue = salesTransactions.reduce((sum, s) => sum + s.totalPrice, 0);
-  const salesPriceRange = totalSalesQuantity > 0 
+  const calculatedSalesPrice = totalSalesQuantity > 0 
     ? parseFloat((totalSalesValue / totalSalesQuantity).toFixed(2)) 
     : 0;
+  
+  // Use manually set sales price range if available, otherwise use calculated value
+  const salesPriceRange = settings.salesPriceRange > 0 
+    ? settings.salesPriceRange 
+    : calculatedSalesPrice;
   
   // Calculate average purchase price
   const totalPurchaseQuantity = purchaseTransactions.reduce((sum, p) => sum + p.quantity, 0);
   const totalPurchaseValue = purchaseTransactions.reduce((sum, p) => sum + p.totalPrice, 0);
-  const buyPriceRange = totalPurchaseQuantity > 0 
+  const averagePurchasePrice = totalPurchaseQuantity > 0 
     ? parseFloat((totalPurchaseValue / totalPurchaseQuantity).toFixed(2)) 
     : 0;
+  
+  // Calculate buy price range according to formula: ((buy price of USD - current price of USD) / current price of USD) * 100
+  const currentUsdPrice = settings.currentUsdPrice || 0;
+  let buyPriceRange = 0;
+  
+  if (currentUsdPrice > 0) {
+    buyPriceRange = parseFloat((((averagePurchasePrice - currentUsdPrice) / currentUsdPrice) * 100).toFixed(2));
+  }
   
   // Calculate values for alternative coins
   const buyPriceRangeAlt = 0; // This would ideally come from a separate calculation
@@ -108,6 +173,8 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
     cashList: bankBalances,
     netSales,
     netPurchases,
+    netExpenses,
+    netIncomes,
     currentMargin,
     requiredMargin,
     netCash,
@@ -119,6 +186,7 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
 export const statsDataAtom = atom<StatsData>((get) => {
   const sales = get(salesAtom);
   const purchases = get(purchasesAtom);
+  const expenses = get(expensesAtom);
   
   // Group sales by day
   const salesByDay = sales.reduce((acc: {date: string, isoDate: string, amount: number}[], sale) => {
@@ -147,6 +215,42 @@ export const statsDataAtom = atom<StatsData>((get) => {
       existingDate.amount += purchase.totalPrice;
     } else {
       acc.push({ date: dateString, isoDate, amount: purchase.totalPrice });
+    }
+    
+    return acc;
+  }, []);
+  
+  // Group expenses by day
+  const expensesByDay = expenses
+    .filter(e => e.type === 'expense')
+    .reduce((acc: {date: string, isoDate: string, amount: number}[], expense) => {
+      const date = new Date(expense.createdAt);
+      const dateString = date.toLocaleDateString();
+      const isoDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      const existingDate = acc.find(item => item.date === dateString);
+      
+      if (existingDate) {
+        existingDate.amount += expense.amount;
+      } else {
+        acc.push({ date: dateString, isoDate, amount: expense.amount });
+      }
+      
+      return acc;
+    }, []);
+  
+  // Group incomes by day
+  const incomesByDay = expenses
+    .filter(e => e.type === 'income')
+    .reduce((acc: {date: string, isoDate: string, amount: number}[], income) => {
+      const date = new Date(income.createdAt);
+      const dateString = date.toLocaleDateString();
+      const isoDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      const existingDate = acc.find(item => item.date === dateString);
+      
+      if (existingDate) {
+        existingDate.amount += income.amount;
+      } else {
+        acc.push({ date: dateString, isoDate, amount: income.amount });
     }
     
     return acc;
@@ -188,6 +292,26 @@ export const statsDataAtom = atom<StatsData>((get) => {
     { platform: 'BITGET SS' as const, amount: calculateBankTotal(purchases, 'BITGET SS') },
   ];
   
+  // Calculate expenses by bank
+  const expensesByBank = [
+    { bank: 'IDBI' as const, amount: expenses.filter(e => e.bank === 'IDBI' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'CANARA SS' as const, amount: expenses.filter(e => e.bank === 'CANARA SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'BOB SS' as const, amount: expenses.filter(e => e.bank === 'BOB SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'PNB' as const, amount: expenses.filter(e => e.bank === 'PNB' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'INDUSIND BLYNK' as const, amount: expenses.filter(e => e.bank === 'INDUSIND BLYNK' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'HDFC SS' as const, amount: expenses.filter(e => e.bank === 'HDFC SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
+  ];
+  
+  // Calculate incomes by bank
+  const incomesByBank = [
+    { bank: 'IDBI' as const, amount: expenses.filter(e => e.bank === 'IDBI' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'CANARA SS' as const, amount: expenses.filter(e => e.bank === 'CANARA SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'BOB SS' as const, amount: expenses.filter(e => e.bank === 'BOB SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'PNB' as const, amount: expenses.filter(e => e.bank === 'PNB' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'INDUSIND BLYNK' as const, amount: expenses.filter(e => e.bank === 'INDUSIND BLYNK' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'HDFC SS' as const, amount: expenses.filter(e => e.bank === 'HDFC SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
+  ];
+  
   // Cash distribution (from dashboard)
   const dashboardData = get(dashboardDataAtom);
   const cashDistribution = dashboardData.cashList;
@@ -195,10 +319,14 @@ export const statsDataAtom = atom<StatsData>((get) => {
   return {
     salesByDay,
     purchasesByDay,
+    expensesByDay,
+    incomesByDay,
     salesByBank,
     salesByPlatform,
     purchasesByBank,
     purchasesByPlatform,
+    expensesByBank,
+    incomesByBank,
     cashDistribution,
   };
 });
@@ -208,7 +336,7 @@ export const addSaleAtom = atom(
   null,
   async (get, set, newSale: Omit<SalesEntry, 'id' | 'createdAt'>) => {
     const sales = get(salesAtom);
-    const auth = get(authAtom);
+    const authState = get(authStateAtom);
     
     const saleWithId = {
       ...newSale,
@@ -237,8 +365,8 @@ export const addSaleAtom = atom(
           name: saleWithId.name,
           contact_no: saleWithId.contactNo,
           created_at: saleWithId.createdAt.toISOString(),
-          user_id: auth.user?.id || null,
-          username: auth.user?.username || null
+          user_id: authState.user?.id || null,
+          username: authState.user?.email || null
         });
       
       if (error) {
@@ -256,7 +384,7 @@ export const addPurchaseAtom = atom(
   null,
   async (get, set, newPurchase: Omit<PurchaseEntry, 'id' | 'createdAt'>) => {
     const purchases = get(purchasesAtom);
-    const auth = get(authAtom);
+    const authState = get(authStateAtom);
     
     const purchaseWithId = {
       ...newPurchase,
@@ -285,8 +413,8 @@ export const addPurchaseAtom = atom(
           name: purchaseWithId.name,
           contact_no: purchaseWithId.contactNo,
           created_at: purchaseWithId.createdAt.toISOString(),
-          user_id: auth.user?.id || null,
-          username: auth.user?.username || null
+          user_id: authState.user?.id || null,
+          username: authState.user?.email || null
         });
       
       if (error) {
@@ -304,7 +432,7 @@ export const addTransferAtom = atom(
   null,
   async (get, set, newTransfer: Omit<TransferEntry, 'id' | 'createdAt'>) => {
     const transfers = get(transfersAtom);
-    const auth = get(authAtom);
+    const authState = get(authStateAtom);
     
     const transferWithId = {
       ...newTransfer,
@@ -325,8 +453,8 @@ export const addTransferAtom = atom(
           to_platform: transferWithId.to,
           quantity: transferWithId.quantity,
           created_at: transferWithId.createdAt.toISOString(),
-          user_id: auth.user?.id || null,
-          username: auth.user?.username || null
+          user_id: authState.user?.id || null,
+          username: authState.user?.email || null
         });
       
       if (error) {
@@ -340,21 +468,232 @@ export const addTransferAtom = atom(
   }
 );
 
+// Add bank transfer atom
+export const addBankTransferAtom = atom(
+  null,
+  async (get, set, newTransfer: Omit<BankTransferEntry, 'id' | 'createdAt'>) => {
+    const transfers = get(bankTransfersAtom);
+    const authState = get(authStateAtom);
+    
+    const transferWithId = {
+      ...newTransfer,
+      id: crypto.randomUUID(),
+      createdAt: new Date(),
+    };
+    
+    // Save to local storage via jotai
+    set(bankTransfersAtom, [...transfers, transferWithId as BankTransferEntry]);
+    
+    // Save to Supabase
+    try {
+      const { data, error } = await supabase
+        .from('bank_transfers')
+        .insert({
+          id: transferWithId.id,
+          from_bank: transferWithId.fromBank,
+          from_account: transferWithId.fromAccount,
+          to_bank: transferWithId.toBank,
+          to_account: transferWithId.toAccount,
+          amount: transferWithId.amount,
+          reference: transferWithId.reference,
+          created_at: transferWithId.createdAt.toISOString(),
+          user_id: authState.user?.id || null,
+          username: authState.user?.email || null
+        });
+      
+      if (error) {
+        console.error('Error saving to Supabase:', error);
+      } else {
+        console.log('Successfully saved to Supabase:', data);
+      }
+    } catch (error) {
+      console.error('Error saving to Supabase:', error);
+    }
+  }
+);
+
+// Add expense to the store
+export const addExpenseAtom = atom(
+  null,
+  async (get, set, expenseData: Omit<ExpenseEntry, 'id' | 'createdAt'>) => {
+    const expenses = get(expensesAtom);
+    
+    // Create a complete expense object with id and createdAt
+    const newExpense: ExpenseEntry = {
+      id: crypto.randomUUID(),
+      createdAt: new Date(),
+      ...expenseData
+    };
+    
+    // Add to local state
+    set(expensesAtom, [...expenses, newExpense]);
+
+    // Save to Supabase
+    try {
+      const { error } = await supabase
+        .from('expenses')
+        .insert({
+          id: newExpense.id,
+          bank: newExpense.bank,
+          amount: newExpense.amount,
+          type: newExpense.type,
+          category: newExpense.category,
+          description: newExpense.description,
+          created_at: newExpense.createdAt
+        });
+
+      if (error) {
+        console.error('Error adding expense:', error);
+      }
+    } catch (error) {
+      console.error('Error adding expense:', error);
+    }
+
+    // Save to local storage
+    localStorage.setItem('expenses', JSON.stringify(get(expensesAtom)));
+  }
+);
+
+// Delete expense from the store
+export const deleteExpenseAtom = atom(
+  null,
+  async (get, set, id: string) => {
+    // Get current expenses
+    const expenses = get(expensesAtom);
+    
+    // Remove from local state
+    set(expensesAtom, expenses.filter(e => e.id !== id));
+
+    // Delete from Supabase
+    try {
+      const { error } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting expense:', error);
+      }
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+    }
+  }
+);
+
+// Delete sale from the store
+export const deleteSaleAtom = atom(
+  null,
+  async (get, set, saleId: string) => {
+    try {
+      const sales = get(salesAtom);
+      const filteredSales = sales.filter((sale) => sale.id !== saleId);
+      set(salesAtom, filteredSales);
+
+      const { error } = await supabase
+        .from('sales')
+        .delete()
+        .eq('id', saleId);
+
+      if (error) {
+        console.error('Error deleting sale:', error);
+      }
+    } catch (error) {
+      console.error('Error deleting sale:', error);
+    }
+  }
+);
+
+// Delete purchase from the store
+export const deletePurchaseAtom = atom(
+  null,
+  async (get, set, purchaseId: string) => {
+    try {
+      const purchases = get(purchasesAtom);
+      const filteredPurchases = purchases.filter((purchase) => purchase.id !== purchaseId);
+      set(purchasesAtom, filteredPurchases);
+
+      const { error } = await supabase
+        .from('purchases')
+        .delete()
+        .eq('id', purchaseId);
+
+      if (error) {
+        console.error('Error deleting purchase:', error);
+      }
+    } catch (error) {
+      console.error('Error deleting purchase:', error);
+    }
+  }
+);
+
+// Delete transfer from the store
+export const deleteTransferAtom = atom(
+  null,
+  async (get, set, transferId: string) => {
+    try {
+      const transfers = get(transfersAtom);
+      const filteredTransfers = transfers.filter((transfer) => transfer.id !== transferId);
+      set(transfersAtom, filteredTransfers);
+
+      const { error } = await supabase
+        .from('transfers')
+        .delete()
+        .eq('id', transferId);
+
+      if (error) {
+        console.error('Error deleting transfer:', error);
+      }
+    } catch (error) {
+      console.error('Error deleting transfer:', error);
+    }
+  }
+);
+
+// Delete bank transfer from the store
+export const deleteBankTransferAtom = atom(
+  null,
+  async (get, set, bankTransferId: string) => {
+    try {
+      const bankTransfers = get(bankTransfersAtom);
+      const filteredBankTransfers = bankTransfers.filter((transfer) => transfer.id !== bankTransferId);
+      set(bankTransfersAtom, filteredBankTransfers);
+
+      const { error } = await supabase
+        .from('bank_transfers')
+        .delete()
+        .eq('id', bankTransferId);
+
+      if (error) {
+        console.error('Error deleting bank transfer:', error);
+      }
+    } catch (error) {
+      console.error('Error deleting bank transfer:', error);
+    }
+  }
+);
+
 // Function to fetch all data from Supabase
 export const refreshDataAtom = atom(
   null,
-  async (_, set) => {
+  async (get, set) => {
+    const authState = get(authStateAtom);
+    
+    // Only fetch if user is authenticated
+    if (!authState.isAuthenticated) {
+      return;
+    }
+    
     try {
-      // Load sales data
+      // Fetch sales
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
         .select('*')
         .order('created_at', { ascending: false });
-        
+      
       if (salesError) {
-        console.error('Error loading sales data:', salesError);
+        console.error('Error fetching sales:', salesError);
       } else {
-        // Transform data to match frontend format
+        // Transform to local format
         const formattedSales = salesData.map(sale => ({
           id: sale.id,
           orderNumber: sale.order_number,
@@ -367,24 +706,24 @@ export const refreshDataAtom = atom(
           quantity: sale.quantity,
           platform: sale.platform,
           name: sale.name,
-          time: new Date(sale.created_at).toLocaleTimeString(),
           contactNo: sale.contact_no,
-          createdAt: new Date(sale.created_at)
-        } as SalesEntry));
+          time: new Date(sale.created_at).toLocaleTimeString(),
+          createdAt: new Date(sale.created_at),
+        }));
         
         set(salesAtom, formattedSales);
       }
       
-      // Load purchases data
+      // Fetch purchases
       const { data: purchasesData, error: purchasesError } = await supabase
         .from('purchases')
         .select('*')
         .order('created_at', { ascending: false });
-        
+      
       if (purchasesError) {
-        console.error('Error loading purchases data:', purchasesError);
+        console.error('Error fetching purchases:', purchasesError);
       } else {
-        // Transform data to match frontend format
+        // Transform to local format
         const formattedPurchases = purchasesData.map(purchase => ({
           id: purchase.id,
           orderNumber: purchase.order_number,
@@ -397,36 +736,86 @@ export const refreshDataAtom = atom(
           quantity: purchase.quantity,
           platform: purchase.platform,
           name: purchase.name,
-          time: new Date(purchase.created_at).toLocaleTimeString(),
           contactNo: purchase.contact_no,
-          createdAt: new Date(purchase.created_at)
-        } as PurchaseEntry));
+          time: new Date(purchase.created_at).toLocaleTimeString(),
+          createdAt: new Date(purchase.created_at),
+        }));
         
         set(purchasesAtom, formattedPurchases);
       }
       
-      // Load transfers data
+      // Fetch transfers
       const { data: transfersData, error: transfersError } = await supabase
         .from('transfers')
         .select('*')
         .order('created_at', { ascending: false });
-        
+      
       if (transfersError) {
-        console.error('Error loading transfers data:', transfersError);
+        console.error('Error fetching transfers:', transfersError);
       } else {
-        // Transform data to match frontend format
+        // Transform to local format
         const formattedTransfers = transfersData.map(transfer => ({
           id: transfer.id,
+          transferNumber: transfer.transfer_number,
           from: transfer.from_platform,
           to: transfer.to_platform,
           quantity: transfer.quantity,
-          createdAt: new Date(transfer.created_at)
-        } as TransferEntry));
+          assetType: transfer.asset_type,
+          notes: transfer.notes,
+          createdAt: new Date(transfer.created_at),
+        }));
         
         set(transfersAtom, formattedTransfers);
       }
+
+      // Fetch bank transfers
+      const { data: bankTransfersData, error: bankTransfersError } = await supabase
+        .from('bank_transfers')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (bankTransfersError) {
+        console.error('Error fetching bank transfers:', bankTransfersError);
+      } else {
+        // Transform to local format
+        const formattedBankTransfers = bankTransfersData.map(transfer => ({
+          id: transfer.id,
+          fromBank: transfer.from_bank,
+          fromAccount: transfer.from_account,
+          toBank: transfer.to_bank,
+          toAccount: transfer.to_account,
+          amount: transfer.amount,
+          reference: transfer.reference,
+          createdAt: new Date(transfer.created_at),
+        }));
+        
+        set(bankTransfersAtom, formattedBankTransfers);
+      }
+
+      // Fetch expenses
+      const { data: expensesData, error: expensesError } = await supabase
+        .from('expenses')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (expensesError) {
+        console.error('Error fetching expenses:', expensesError);
+      } else {
+        // Transform to local format
+        const formattedExpenses = expensesData.map(expense => ({
+          id: expense.id,
+          bank: expense.bank,
+          amount: expense.amount,
+          type: expense.type,
+          category: expense.category,
+          description: expense.description,
+          createdAt: new Date(expense.created_at),
+        }));
+        
+        set(expensesAtom, formattedExpenses);
+      }
     } catch (error) {
-      console.error('Error loading data from Supabase:', error);
+      console.error('Error refreshing data:', error);
     }
   }
 );
@@ -439,14 +828,210 @@ export const clearDataAtom = atom(
     set(salesAtom, []);
     set(purchasesAtom, []);
     set(transfersAtom, []);
+    set(bankTransfersAtom, []);
+    set(expensesAtom, []);
     
     // Clear Supabase tables
     try {
       await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('purchases').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('transfers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('bank_transfers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('expenses').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     } catch (error) {
       console.error('Error clearing Supabase data:', error);
+    }
+  }
+);
+
+// Actions for updating existing entries
+export const updateSaleAtom = atom(
+  null,
+  async (get, set, updatedSale: SalesEntry) => {
+    const sales = get(salesAtom);
+    const authState = get(authStateAtom);
+    
+    // Update in local storage via jotai
+    set(salesAtom, sales.map(sale => 
+      sale.id === updatedSale.id ? updatedSale : sale
+    ));
+    
+    // Update in Supabase
+    try {
+      const { data, error } = await supabase
+        .from('sales')
+        .update({
+          order_number: updatedSale.orderNumber,
+          bank: updatedSale.bank,
+          order_type: updatedSale.orderType,
+          asset_type: updatedSale.assetType,
+          fiat_type: updatedSale.fiatType,
+          total_price: updatedSale.totalPrice,
+          price: updatedSale.price,
+          quantity: updatedSale.quantity,
+          platform: updatedSale.platform,
+          name: updatedSale.name,
+          contact_no: updatedSale.contactNo,
+          edited_by: authState.user?.email || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', updatedSale.id);
+      
+      if (error) {
+        console.error('Error updating in Supabase:', error);
+      } else {
+        console.log('Successfully updated in Supabase:', data);
+      }
+    } catch (error) {
+      console.error('Error updating in Supabase:', error);
+    }
+  }
+);
+
+export const updatePurchaseAtom = atom(
+  null,
+  async (get, set, updatedPurchase: PurchaseEntry) => {
+    const purchases = get(purchasesAtom);
+    const authState = get(authStateAtom);
+    
+    // Update in local storage via jotai
+    set(purchasesAtom, purchases.map(purchase => 
+      purchase.id === updatedPurchase.id ? updatedPurchase : purchase
+    ));
+    
+    // Update in Supabase
+    try {
+      const { data, error } = await supabase
+        .from('purchases')
+        .update({
+          order_number: updatedPurchase.orderNumber,
+          bank: updatedPurchase.bank,
+          order_type: updatedPurchase.orderType,
+          asset_type: updatedPurchase.assetType,
+          fiat_type: updatedPurchase.fiatType,
+          total_price: updatedPurchase.totalPrice,
+          price: updatedPurchase.price,
+          quantity: updatedPurchase.quantity,
+          platform: updatedPurchase.platform,
+          name: updatedPurchase.name,
+          contact_no: updatedPurchase.contactNo,
+          edited_by: authState.user?.email || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', updatedPurchase.id);
+      
+      if (error) {
+        console.error('Error updating in Supabase:', error);
+      } else {
+        console.log('Successfully updated in Supabase:', data);
+      }
+    } catch (error) {
+      console.error('Error updating in Supabase:', error);
+    }
+  }
+);
+
+export const updateTransferAtom = atom(
+  null,
+  async (get, set, updatedTransfer: TransferEntry) => {
+    const transfers = get(transfersAtom);
+    const authState = get(authStateAtom);
+    
+    // Update in local storage via jotai
+    set(transfersAtom, transfers.map(transfer => 
+      transfer.id === updatedTransfer.id ? updatedTransfer : transfer
+    ));
+    
+    // Update in Supabase
+    try {
+      const { data, error } = await supabase
+        .from('transfers')
+        .update({
+          from_platform: updatedTransfer.from,
+          to_platform: updatedTransfer.to,
+          quantity: updatedTransfer.quantity,
+          edited_by: authState.user?.email || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', updatedTransfer.id);
+      
+      if (error) {
+        console.error('Error updating in Supabase:', error);
+      } else {
+        console.log('Successfully updated in Supabase:', data);
+      }
+    } catch (error) {
+      console.error('Error updating in Supabase:', error);
+    }
+  }
+);
+
+export const updateBankTransferAtom = atom(
+  null,
+  async (get, set, updatedTransfer: BankTransferEntry) => {
+    const transfers = get(bankTransfersAtom);
+    const authState = get(authStateAtom);
+    
+    // Update in local storage via jotai
+    set(bankTransfersAtom, transfers.map(transfer => 
+      transfer.id === updatedTransfer.id ? updatedTransfer : transfer
+    ));
+    
+    // Update in Supabase
+    try {
+      const { data, error } = await supabase
+        .from('bank_transfers')
+        .update({
+          from_bank: updatedTransfer.fromBank,
+          from_account: updatedTransfer.fromAccount,
+          to_bank: updatedTransfer.toBank,
+          to_account: updatedTransfer.toAccount,
+          amount: updatedTransfer.amount,
+          reference: updatedTransfer.reference,
+          edited_by: authState.user?.email || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', updatedTransfer.id);
+      
+      if (error) {
+        console.error('Error updating in Supabase:', error);
+      } else {
+        console.log('Successfully updated in Supabase:', data);
+      }
+    } catch (error) {
+      console.error('Error updating in Supabase:', error);
+    }
+  }
+);
+
+export const updateExpenseAtom = atom(
+  null,
+  async (get, set, expense: ExpenseEntry) => {
+    const expenses = get(expensesAtom);
+    const updatedExpenses = expenses.map((e) => 
+      e.id === expense.id ? expense : e
+    );
+    set(expensesAtom, updatedExpenses);
+    
+    try {
+      // Update in Supabase
+      const { data, error } = await supabase
+        .from('expenses')
+        .update({
+          bank: expense.bank,
+          amount: expense.amount,
+          type: expense.type,
+          category: expense.category,
+          description: expense.description,
+          created_at: expense.createdAt,
+        })
+        .eq('id', expense.id);
+
+      if (error) {
+        console.error('Error updating expense:', error);
+      }
+    } catch (error) {
+      console.error('Failed to update expense:', error);
     }
   }
 );

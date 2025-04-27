@@ -14,7 +14,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { dashboardDataAtom, refreshDataAtom, statsDataAtom } from '../store/data';
+import { dashboardDataAtom, refreshDataAtom, statsDataAtom, settingsAtom } from '../store/data';
 import DashboardCard from '../components/layout/dashboard-card';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { formatCurrency, formatQuantity } from '../lib/utils';
@@ -27,13 +27,14 @@ import {
   DatabaseIcon
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { authAtom } from '../store/auth';
+import { authStateAtom } from '../store/supabaseAuth';
 import SettingsModal from '../components/settings-modal';
 
 const Dashboard = () => {
   const [dashboardData] = useAtom(dashboardDataAtom);
   const [statsData] = useAtom(statsDataAtom);
-  const [auth] = useAtom(authAtom);
+  const [authState] = useAtom(authStateAtom);
+  const [settings] = useAtom(settingsAtom);
   const [, refreshData] = useAtom(refreshDataAtom);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'stock' | 'cash'>('overview');
@@ -102,7 +103,7 @@ const Dashboard = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
           <h1 className="text-2xl font-bold">Trading Terminal Dashboard</h1>
-          <p className="text-gray-500">Welcome back, {auth.user?.username}!</p>
+          <p className="text-gray-500">Welcome back, {authState.user?.email?.split('@')[0] || 'User'}!</p>
         </div>
         
         <div className="flex items-center gap-2">
@@ -155,12 +156,29 @@ const Dashboard = () => {
         <>
           {/* Main metrics cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <DashboardCard 
-              title="Sales Price Range" 
-              value={`USDT ${dashboardData.salesPriceRange}`}
-              trend="neutral"
-              icon={<DollarSign className="h-4 w-4 text-blue-500" />}
-            />
+            <Card className="shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg font-medium flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-blue-500" />
+                  Sales Price Range
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col gap-2">
+                  <p className="text-2xl font-bold">{`USDT ${dashboardData.salesPriceRange}`}</p>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => setSettingsOpen(true)}
+                    >
+                      Update USD Price
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
             
             <DashboardCard 
               title="Total Cash" 
@@ -170,13 +188,23 @@ const Dashboard = () => {
               icon={<DatabaseIcon className="h-4 w-4 text-green-500" />}
             />
             
-            <DashboardCard 
-              title="Buy Price Range" 
-              value={`USDT ${dashboardData.buyPriceRange}`}
-              secondaryValue={`OTHER COINS ${dashboardData.buyPriceRangeAlt}`}
-              trend="neutral"
-              icon={<ArrowDownUp className="h-4 w-4 text-orange-500" />}
-            />
+            <Card className="shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg font-medium flex items-center gap-2">
+                  <ArrowDownUp className="h-4 w-4 text-orange-500" />
+                  Buy Price Range
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col gap-2">
+                  <p className="text-2xl font-bold">{`${dashboardData.buyPriceRange}%`}</p>
+                  <p className="text-sm text-gray-500">{`OTHER COINS ${dashboardData.buyPriceRangeAlt}`}</p>
+                  <div className="text-xs text-gray-400">
+                    Based on current USD price: {settings.currentUsdPrice || 'Not set'}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
             
             <DashboardCard 
               title="Current Margin" 

@@ -2,13 +2,20 @@ import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { CSVLink } from 'react-csv';
 import { Button } from './ui/button';
-import { DownloadIcon } from 'lucide-react';
+import { DownloadIcon, PencilIcon } from 'lucide-react';
 import { formatCurrency, formatQuantity, formatDateTime } from '../lib/utils';
 
 interface Column {
   key: string;
   label: string;
-  formatter?: (value: any) => React.ReactNode;
+  formatter?: (value: any, row?: any) => React.ReactNode;
+}
+
+interface RowAction {
+  label: string;
+  icon?: React.ReactNode;
+  onClick: (rowData: any) => void;
+  variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
 }
 
 interface DataTableProps {
@@ -16,6 +23,7 @@ interface DataTableProps {
   columns: Column[];
   title: string;
   csvFilename?: string;
+  rowActions?: RowAction[];
 }
 
 const DataTable: React.FC<DataTableProps> = ({
@@ -23,12 +31,15 @@ const DataTable: React.FC<DataTableProps> = ({
   columns,
   title,
   csvFilename = 'data-export.csv',
+  rowActions = []
 }) => {
   // Prepare headers for CSV export
   const csvHeaders = columns.map(column => ({
     label: column.label,
     key: column.key
   }));
+
+  const hasActions = rowActions.length > 0;
 
   return (
     <div className="w-full">
@@ -58,6 +69,11 @@ const DataTable: React.FC<DataTableProps> = ({
                   {column.label}
                 </TableHead>
               ))}
+              {hasActions && (
+                <TableHead className="bg-gray-50 font-medium text-right">
+                  Actions
+                </TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -67,15 +83,31 @@ const DataTable: React.FC<DataTableProps> = ({
                   {columns.map(column => (
                     <TableCell key={`${rowIndex}-${column.key}`}>
                       {column.formatter 
-                        ? column.formatter(row[column.key])
+                        ? column.formatter(row[column.key], row)
                         : row[column.key]}
                     </TableCell>
                   ))}
+                  {hasActions && (
+                    <TableCell className="text-right space-x-1">
+                      {rowActions.map((action, actionIndex) => (
+                        <Button
+                          key={actionIndex}
+                          size="sm"
+                          variant={action.variant || 'ghost'}
+                          onClick={() => action.onClick(row)}
+                          className="h-8 w-8 p-0"
+                          title={action.label}
+                        >
+                          {action.icon}
+                        </Button>
+                      ))}
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={columns.length + (hasActions ? 1 : 0)} className="h-24 text-center text-muted-foreground">
                   No data available
                 </TableCell>
               </TableRow>

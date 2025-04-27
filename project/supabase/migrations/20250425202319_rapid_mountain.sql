@@ -45,6 +45,18 @@
       - `username` (text, optional)
       - `created_at` (timestamptz)
 
+    - `bank_transfers`
+      - `id` (uuid, primary key)
+      - `from_bank` (text)
+      - `from_account` (text)
+      - `to_bank` (text)
+      - `to_account` (text)
+      - `amount` (numeric)
+      - `reference` (text, optional)
+      - `user_id` (text, optional)
+      - `username` (text, optional)
+      - `created_at` (timestamptz)
+
   2. Security
     - Enable RLS on all tables
     - Add policies for authenticated users to read/write their own data
@@ -141,7 +153,36 @@ CREATE POLICY "Users can insert own transfers data"
   TO authenticated
   WITH CHECK (auth.uid() IS NOT NULL);
 
+-- Create bank_transfers table for bank-to-bank transfers
+CREATE TABLE IF NOT EXISTS bank_transfers (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  from_bank text NOT NULL,
+  from_account text NOT NULL,
+  to_bank text NOT NULL,
+  to_account text NOT NULL,
+  amount numeric NOT NULL,
+  reference text,
+  user_id text,
+  username text,
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE bank_transfers ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can read own bank transfers data"
+  ON bank_transfers
+  FOR SELECT
+  TO authenticated
+  USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Users can insert own bank transfers data"
+  ON bank_transfers
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (auth.uid() IS NOT NULL);
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS sales_created_at_idx ON sales(created_at);
 CREATE INDEX IF NOT EXISTS purchases_created_at_idx ON purchases(created_at);
 CREATE INDEX IF NOT EXISTS transfers_created_at_idx ON transfers(created_at);
+CREATE INDEX IF NOT EXISTS bank_transfers_created_at_idx ON bank_transfers(created_at);
