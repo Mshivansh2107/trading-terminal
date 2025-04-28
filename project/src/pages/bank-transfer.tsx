@@ -74,8 +74,18 @@ const BankTransfer = () => {
     },
     { 
       key: 'createdAt', 
-      label: 'Date & Time',
+      label: 'Created At',
       formatter: (value: Date) => formatDateTime(new Date(value))
+    },
+    { 
+      key: 'editedBy', 
+      label: 'Last Edited By',
+      formatter: (value: string | undefined) => value || '-'
+    },
+    { 
+      key: 'updatedAt', 
+      label: 'Last Updated',
+      formatter: (value: Date | undefined) => value ? formatDateTime(new Date(value)) : '-'
     }
   ], []);
 

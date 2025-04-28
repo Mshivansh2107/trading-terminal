@@ -14,24 +14,7 @@ export type SalesEntry = {
   id: string;
   orderNumber: string;
   bank: Bank;
-  orderType: 'Sell';
-  assetType: string; 
-  fiatType: Currency;
-  totalPrice: number;
-  price: number;
-  quantity: number;
-  platform: Platform;
-  name: string;
-  time: string;
-  contactNo?: string;
-  createdAt: Date;
-}
-
-export type PurchaseEntry = {
-  id: string;
-  orderNumber: string;
-  bank: Bank;
-  orderType: 'Buy';
+  orderType: string;
   assetType: string;
   fiatType: Currency;
   totalPrice: number;
@@ -39,9 +22,28 @@ export type PurchaseEntry = {
   quantity: number;
   platform: Platform;
   name: string;
-  time: string;
   contactNo?: string;
   createdAt: Date;
+  updatedAt?: Date;
+  editedBy?: string;
+}
+
+export type PurchaseEntry = {
+  id: string;
+  orderNumber: string;
+  bank: Bank;
+  orderType: string;
+  assetType: string;
+  fiatType: Currency;
+  totalPrice: number;
+  price: number;
+  quantity: number;
+  platform: Platform;
+  name: string;
+  contactNo?: string;
+  createdAt: Date;
+  updatedAt?: Date;
+  editedBy?: string;
 }
 
 export type TransferEntry = {
@@ -50,6 +52,8 @@ export type TransferEntry = {
   to: Platform;
   quantity: number;
   createdAt: Date;
+  updatedAt?: Date;
+  editedBy?: string;
 }
 
 export type BankTransferEntry = {
@@ -61,7 +65,9 @@ export type BankTransferEntry = {
   amount: number;
   reference?: string;
   createdAt: Date;
-};
+  updatedAt?: Date;
+  editedBy?: string;
+}
 
 export type StockData = {
   platform: Platform;

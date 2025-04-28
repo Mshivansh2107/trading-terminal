@@ -147,7 +147,7 @@ const Login = () => {
                   />
                 </div>
                 
-                <div>
+              <div>
                   <div className="flex justify-between items-center mb-1">
                     <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                       Password
@@ -191,14 +191,14 @@ const Login = () => {
                   </div>
                 )}
 
-                <Button
-                  type="submit"
-                  className="w-full py-3"
+              <Button
+                type="submit"
+                className="w-full py-3"
                   disabled={!email || !password || authState.isLoading}
-                >
+              >
                   {authState.isLoading ? 'Signing in...' : 'Sign in'}
-                </Button>
-              </form>
+              </Button>
+            </form>
             )}
           </CardContent>
           <CardFooter className="justify-center">

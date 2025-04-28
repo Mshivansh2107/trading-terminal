@@ -70,38 +70,38 @@ function App() {
   return (
     <Router>
       <ToastProvider>
-        <div className="min-h-screen bg-gray-50 flex">
-          <Navbar />
-          
+      <div className="min-h-screen bg-gray-50 flex">
+        <Navbar />
+        
           <main className={`flex-1 ${authState.isAuthenticated ? 'ml-16 md:ml-64' : ''} min-h-screen bg-gray-50 transition-all duration-300 ease-in-out`}>
-            <Routes>
-              <Route path="/login" element={<Login />} />
+          <Routes>
+            <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/reset-password" element={<ResetPassword />} />
-              
-              <Route path="/" element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } />
-              
-              <Route path="/sales" element={
-                <ProtectedRoute>
-                  <Sales />
-                </ProtectedRoute>
-              } />
-              
-              <Route path="/purchase" element={
-                <ProtectedRoute>
-                  <Purchase />
-                </ProtectedRoute>
-              } />
-              
-              <Route path="/transfer" element={
-                <ProtectedRoute>
-                  <Transfer />
-                </ProtectedRoute>
-              } />
+            
+            <Route path="/" element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/sales" element={
+              <ProtectedRoute>
+                <Sales />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/purchase" element={
+              <ProtectedRoute>
+                <Purchase />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/transfer" element={
+              <ProtectedRoute>
+                <Transfer />
+              </ProtectedRoute>
+            } />
               
               <Route path="/bank-transfer" element={
                 <ProtectedRoute>
@@ -114,12 +114,12 @@ function App() {
                   <Expenses />
                 </ProtectedRoute>
               } />
-              
-              <Route path="/stats" element={
-                <ProtectedRoute>
-                  <Stats />
-                </ProtectedRoute>
-              } />
+            
+            <Route path="/stats" element={
+              <ProtectedRoute>
+                <Stats />
+              </ProtectedRoute>
+            } />
               
               {/* Admin Routes */}
               <Route path="/admin/users" element={
@@ -127,11 +127,11 @@ function App() {
                   <AdminUsers />
                 </AdminRoute>
               } />
-              
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </main>
-        </div>
+            
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
       </ToastProvider>
     </Router>
   );
