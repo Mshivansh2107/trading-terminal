@@ -29,6 +29,7 @@ import {
 import { Button } from '../components/ui/button';
 import { authStateAtom } from '../store/supabaseAuth';
 import SettingsModal from '../components/settings-modal';
+import ErrorBoundary from '../components/error-boundary';
 
 const Dashboard = () => {
   const [dashboardData] = useAtom(dashboardDataAtom);
@@ -155,7 +156,7 @@ const Dashboard = () => {
       {activeTab === 'overview' && (
         <>
           {/* Main metrics cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <Card className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg font-medium flex items-center gap-2">
@@ -179,12 +180,12 @@ const Dashboard = () => {
                 </div>
               </CardContent>
             </Card>
-            
-            <DashboardCard 
-              title="Total Cash" 
-              value={formatCurrency(dashboardData.totalCash)}
-              secondaryValue={formatCurrency(dashboardData.totalCashAlt)}
-              trend="up"
+        
+        <DashboardCard 
+          title="Total Cash" 
+          value={formatCurrency(dashboardData.totalCash)}
+          secondaryValue={formatCurrency(dashboardData.totalCashAlt)}
+          trend="up"
               icon={<DatabaseIcon className="h-4 w-4 text-green-500" />}
             />
             
@@ -205,13 +206,13 @@ const Dashboard = () => {
                 </div>
               </CardContent>
             </Card>
-            
-            <DashboardCard 
-              title="Current Margin" 
-              value={`${dashboardData.currentMargin}%`}
-              secondaryValue={`Required: ${dashboardData.requiredMargin}%`}
-              trend={marginStatus}
-              valueClassName={marginStatus === 'up' ? 'text-green-600' : 'text-red-600'}
+        
+        <DashboardCard 
+          title="Current Margin" 
+          value={`${dashboardData.currentMargin}%`}
+          secondaryValue={`Required: ${dashboardData.requiredMargin}%`}
+          trend={marginStatus}
+          valueClassName={marginStatus === 'up' ? 'text-green-600' : 'text-red-600'}
               icon={<BarChart2 className="h-4 w-4 text-purple-500" />}
             />
           </div>
@@ -232,19 +233,19 @@ const Dashboard = () => {
               trend={dashboardData.netCashAfterSales >= 0 ? 'up' : 'down'}
               className="h-full"
               icon={<DatabaseIcon className="h-4 w-4 text-green-500" />}
-            />
-          </div>
-          
+        />
+      </div>
+      
           {/* Terminal metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <Card className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg font-medium flex items-center gap-2">
                   <span className="text-green-500">●</span> Sales Terminal 
                   <span className="ml-auto text-xl font-bold text-green-600">{formatCurrency(dashboardData.netSales)}</span>
                 </CardTitle>
-              </CardHeader>
-              <CardContent>
+          </CardHeader>
+          <CardContent>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={salesChartData}>
@@ -314,21 +315,21 @@ const Dashboard = () => {
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
+            </div>
+          </CardContent>
+        </Card>
           </div>
         </>
       )}
-      
+        
       {activeTab === 'stock' && (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <Card className="lg:col-span-2 shadow-sm hover:shadow-md transition-shadow">
-              <CardHeader>
+          <CardHeader>
                 <CardTitle>Stock Inventory</CardTitle>
-              </CardHeader>
-              <CardContent>
+          </CardHeader>
+          <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -388,10 +389,10 @@ const Dashboard = () => {
                       <Tooltip formatter={(value) => [formatQuantity(Number(value)), 'Quantity']} />
                     </PieChart>
                   </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
         </>
       )}
       
@@ -399,10 +400,10 @@ const Dashboard = () => {
         <>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <Card className="lg:col-span-2 shadow-sm hover:shadow-md transition-shadow">
-              <CardHeader>
+          <CardHeader>
                 <CardTitle>Cash Balances</CardTitle>
-              </CardHeader>
-              <CardContent>
+          </CardHeader>
+          <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -428,17 +429,17 @@ const Dashboard = () => {
                       </tr>
                     </tbody>
                   </table>
-                </div>
-              </CardContent>
-            </Card>
-            
+            </div>
+          </CardContent>
+        </Card>
+        
             <Card className="shadow-sm hover:shadow-md transition-shadow">
-              <CardHeader>
+          <CardHeader>
                 <CardTitle>Cash Distribution</CardTitle>
-              </CardHeader>
-              <CardContent>
+          </CardHeader>
+          <CardContent>
                 <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={cashPieData}
@@ -457,16 +458,18 @@ const Dashboard = () => {
                       </Pie>
                       <Tooltip formatter={(value) => [formatCurrency(Number(value)), 'Amount']} />
                     </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
         </>
       )}
       
       {/* Settings Modal */}
-      <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <ErrorBoundary>
+        <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+      </ErrorBoundary>
     </div>
   );
 };

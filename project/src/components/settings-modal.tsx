@@ -1,6 +1,11 @@
-import React from 'react';
+import React, { useEffect, useTransition } from 'react';
 import { useAtom } from 'jotai';
-import { settingsAtom } from '../store/data';
+import { 
+  settingsAtom, 
+  syncSettingsAtom, 
+  updateSettingsAtom,
+  autoFetchUsdPriceAtom 
+} from '../store/data';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +17,7 @@ import {
 import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
+import { RefreshCw } from 'lucide-react';
 
 interface SettingsModalProps {
   open: boolean;
@@ -19,25 +25,75 @@ interface SettingsModalProps {
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ open, onOpenChange }) => {
-  const [settings, setSettings] = useAtom(settingsAtom);
-  const [requiredMargin, setRequiredMargin] = React.useState(
-    settings?.requiredMargin?.toString() || '3'
-  );
-  const [currentUsdPrice, setCurrentUsdPrice] = React.useState(
-    settings?.currentUsdPrice?.toString() || '0'
-  );
-  const [salesPriceRange, setSalesPriceRange] = React.useState(
-    settings?.salesPriceRange?.toString() || '0'
-  );
+  const [settings] = useAtom(settingsAtom);
+  const [, syncSettings] = useAtom(syncSettingsAtom);
+  const [, updateSettings] = useAtom(updateSettingsAtom);
+  const [, autoFetchPrice] = useAtom(autoFetchUsdPriceAtom);
+  const [isPending, startTransition] = useTransition();
+  const [isLoading, setIsLoading] = React.useState(false);
+  
+  const [requiredMargin, setRequiredMargin] = React.useState('3');
+  const [currentUsdPrice, setCurrentUsdPrice] = React.useState('0');
+  const [salesPriceRange, setSalesPriceRange] = React.useState('0');
+  const [buyPriceUsdt, setBuyPriceUsdt] = React.useState('0');
 
-  const handleSave = () => {
-    setSettings({
-      ...(settings || {}),
-      requiredMargin: parseFloat(requiredMargin) || 3,
-      currentUsdPrice: parseFloat(currentUsdPrice) || 0,
-      salesPriceRange: parseFloat(salesPriceRange) || 0,
-    });
-    onOpenChange(false);
+  // Update local state when settings change
+  useEffect(() => {
+    if (settings) {
+      setRequiredMargin(String(settings.requiredMargin ?? 3));
+      setCurrentUsdPrice(String(settings.currentUsdPrice ?? 0));
+      setSalesPriceRange(String(settings.salesPriceRange ?? 0));
+      setBuyPriceUsdt(String(settings.buyPriceUsdt ?? 0));
+    }
+  }, [settings]);
+
+  // Load settings when modal opens and start auto-fetch
+  useEffect(() => {
+    if (open) {
+      startTransition(() => {
+        syncSettings();
+      });
+      
+      // Set up auto-fetch interval
+      const interval = setInterval(() => {
+        startTransition(() => {
+          autoFetchPrice();
+        });
+      }, 60000); // Fetch every minute
+      
+      return () => clearInterval(interval);
+    }
+  }, [open, syncSettings, autoFetchPrice]);
+
+  const handleSave = async () => {
+    setIsLoading(true);
+    try {
+      startTransition(() => {
+        updateSettings({
+          requiredMargin: parseFloat(requiredMargin) || 3,
+          salesPriceRange: parseFloat(salesPriceRange) || 0,
+          buyPriceUsdt: parseFloat(buyPriceUsdt) || 0,
+        });
+      });
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRefreshPrice = () => {
+    setIsLoading(true);
+    try {
+      startTransition(() => {
+        autoFetchPrice();
+      });
+    } catch (error) {
+      console.error('Error refreshing USD price:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -67,14 +123,41 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onOpenChange }) => 
           
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="currentUsdPrice" className="text-right">
-              Current USD Price
+              Current USDT Price
+            </Label>
+            <div className="col-span-3 flex gap-2">
+              <Input
+                id="currentUsdPrice"
+                type="number"
+                step="0.01"
+                value={currentUsdPrice}
+                onChange={(e) => setCurrentUsdPrice(e.target.value)}
+                className="flex-1"
+                disabled
+              />
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                onClick={handleRefreshPrice}
+                disabled={isLoading || isPending}
+                title="Refresh live price"
+              >
+                <RefreshCw className={`h-4 w-4 ${(isLoading || isPending) ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="buyPriceUsdt" className="text-right">
+              Buy Price USDT
             </Label>
             <Input
-              id="currentUsdPrice"
+              id="buyPriceUsdt"
               type="number"
               step="0.01"
-              value={currentUsdPrice}
-              onChange={(e) => setCurrentUsdPrice(e.target.value)}
+              value={buyPriceUsdt}
+              onChange={(e) => setBuyPriceUsdt(e.target.value)}
               className="col-span-3"
             />
           </div>
@@ -98,7 +181,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onOpenChange }) => 
         </div>
         
         <DialogFooter>
-          <Button type="submit" onClick={handleSave}>Save changes</Button>
+          <Button 
+            type="submit" 
+            onClick={handleSave}
+            disabled={isLoading || isPending}
+          >
+            {(isLoading || isPending) ? 'Saving...' : 'Save changes'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

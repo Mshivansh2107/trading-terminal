@@ -18,6 +18,7 @@ import {
 } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import { authStateAtom } from './supabaseAuth';
+import { getUsdtPrice } from '../lib/usdtPrice';
 
 // Initial data store
 export const salesAtom = atomWithStorage<SalesEntry[]>('salesData', []);
@@ -30,8 +31,121 @@ export const expensesAtom = atomWithStorage<ExpenseEntry[]>('expensesData', []);
 export const settingsAtom = atomWithStorage('appSettings', {
   requiredMargin: 3,
   currentUsdPrice: 0,
-  salesPriceRange: 0
+  salesPriceRange: 0,
+  buyPriceUsdt: 0,
+  lastUsdtPriceUpdate: null as number | null
 });
+
+// Add a new atom for syncing settings with backend
+export const syncSettingsAtom = atom(
+  null,
+  async (get, set) => {
+    try {
+      // Get settings from backend
+      const { data: settings, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'trading_settings')
+        .single();
+
+      if (error) throw error;
+
+      if (settings?.value) {
+        // Update local settings
+        set(settingsAtom, {
+          ...settings.value,
+          lastUsdtPriceUpdate: Date.now()
+        });
+      }
+    } catch (error) {
+      console.error('Error syncing settings:', error);
+    }
+  }
+);
+
+// Add a new atom for updating settings in backend
+export const updateSettingsAtom = atom(
+  null,
+  async (get, set, newSettings: Partial<{
+    requiredMargin: number;
+    currentUsdPrice: number;
+    salesPriceRange: number;
+    buyPriceUsdt: number;
+    lastUsdtPriceUpdate: number | null;
+  }>) => {
+    try {
+      const currentSettings = get(settingsAtom);
+      const updatedSettings = {
+        ...currentSettings,
+        ...newSettings
+      };
+
+      // Update local state
+      set(settingsAtom, updatedSettings);
+
+      // Update backend
+      const { error } = await supabase
+        .from('settings')
+        .update({
+          value: updatedSettings,
+          updated_at: new Date().toISOString()
+        })
+        .eq('key', 'trading_settings');
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating settings:', error);
+    }
+  }
+);
+
+// Add auto-fetch for USD price
+export const autoFetchUsdPriceAtom = atom(
+  null,
+  async (get, set) => {
+    try {
+      const price = await getUsdtPrice();
+      if (price > 0) {
+        // Update both local and backend
+        set(updateSettingsAtom, {
+          currentUsdPrice: price,
+          lastUsdtPriceUpdate: Date.now()
+        });
+      }
+    } catch (error) {
+      console.error('Error auto-fetching USD price:', error);
+    }
+  }
+);
+
+// Add a new atom for live USDT price updates
+export const liveUsdtPriceAtom = atom(
+  async (get) => {
+    const settings = get(settingsAtom);
+    const now = Date.now();
+    
+    // Only fetch new price if we haven't updated in the last minute
+    if (!settings.lastUsdtPriceUpdate || now - settings.lastUsdtPriceUpdate > 60000) {
+      const price = await getUsdtPrice();
+      if (price > 0) {
+        return price;
+      }
+    }
+    return settings.currentUsdPrice;
+  },
+  (_get, set) => {
+    const now = Date.now();
+    getUsdtPrice().then(price => {
+      if (price > 0) {
+        set(settingsAtom, prev => ({
+          ...prev,
+          currentUsdPrice: price,
+          lastUsdtPriceUpdate: now
+        }));
+      }
+    });
+  }
+);
 
 // Computed data for dashboard
 export const dashboardDataAtom = atom<DashboardData>((get) => {
@@ -143,10 +257,11 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   
   // Calculate buy price range according to formula: ((buy price of USD - current price of USD) / current price of USD) * 100
   const currentUsdPrice = settings.currentUsdPrice || 0;
+  const buyPriceUsdt = settings.buyPriceUsdt || 0;
   let buyPriceRange = 0;
   
-  if (currentUsdPrice > 0) {
-    buyPriceRange = parseFloat((((averagePurchasePrice - currentUsdPrice) / currentUsdPrice) * 100).toFixed(2));
+  if (currentUsdPrice > 0 && buyPriceUsdt > 0) {
+    buyPriceRange = parseFloat((((buyPriceUsdt - currentUsdPrice) / currentUsdPrice) * 100).toFixed(2));
   }
   
   // Calculate values for alternative coins
@@ -687,7 +802,7 @@ export const refreshDataAtom = atom(
       // Fetch sales
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
-        .select('*')
+        .select('*, edited_by, updated_at')
         .order('created_at', { ascending: false });
       
       if (salesError) {
@@ -707,8 +822,9 @@ export const refreshDataAtom = atom(
           platform: sale.platform,
           name: sale.name,
           contactNo: sale.contact_no,
-          time: new Date(sale.created_at).toLocaleTimeString(),
           createdAt: new Date(sale.created_at),
+          updatedAt: sale.updated_at ? new Date(sale.updated_at) : undefined,
+          editedBy: sale.edited_by || undefined
         }));
         
         set(salesAtom, formattedSales);
@@ -717,7 +833,7 @@ export const refreshDataAtom = atom(
       // Fetch purchases
       const { data: purchasesData, error: purchasesError } = await supabase
         .from('purchases')
-        .select('*')
+        .select('*, edited_by, updated_at')
         .order('created_at', { ascending: false });
       
       if (purchasesError) {
@@ -737,8 +853,9 @@ export const refreshDataAtom = atom(
           platform: purchase.platform,
           name: purchase.name,
           contactNo: purchase.contact_no,
-          time: new Date(purchase.created_at).toLocaleTimeString(),
           createdAt: new Date(purchase.created_at),
+          updatedAt: purchase.updated_at ? new Date(purchase.updated_at) : undefined,
+          editedBy: purchase.edited_by || undefined
         }));
         
         set(purchasesAtom, formattedPurchases);
@@ -747,7 +864,7 @@ export const refreshDataAtom = atom(
       // Fetch transfers
       const { data: transfersData, error: transfersError } = await supabase
         .from('transfers')
-        .select('*')
+        .select('*, edited_by, updated_at')
         .order('created_at', { ascending: false });
       
       if (transfersError) {
@@ -756,13 +873,12 @@ export const refreshDataAtom = atom(
         // Transform to local format
         const formattedTransfers = transfersData.map(transfer => ({
           id: transfer.id,
-          transferNumber: transfer.transfer_number,
           from: transfer.from_platform,
           to: transfer.to_platform,
           quantity: transfer.quantity,
-          assetType: transfer.asset_type,
-          notes: transfer.notes,
           createdAt: new Date(transfer.created_at),
+          updatedAt: transfer.updated_at ? new Date(transfer.updated_at) : undefined,
+          editedBy: transfer.edited_by || undefined
         }));
         
         set(transfersAtom, formattedTransfers);
@@ -771,7 +887,7 @@ export const refreshDataAtom = atom(
       // Fetch bank transfers
       const { data: bankTransfersData, error: bankTransfersError } = await supabase
         .from('bank_transfers')
-        .select('*')
+        .select('*, edited_by, updated_at')
         .order('created_at', { ascending: false });
       
       if (bankTransfersError) {
@@ -787,6 +903,8 @@ export const refreshDataAtom = atom(
           amount: transfer.amount,
           reference: transfer.reference,
           createdAt: new Date(transfer.created_at),
+          updatedAt: transfer.updated_at ? new Date(transfer.updated_at) : undefined,
+          editedBy: transfer.edited_by || undefined
         }));
         
         set(bankTransfersAtom, formattedBankTransfers);

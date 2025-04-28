@@ -65,8 +65,18 @@ const Transfer = () => {
     },
     { 
       key: 'createdAt', 
-      label: 'Date & Time',
+      label: 'Created At',
       formatter: (value: Date) => formatDateTime(new Date(value))
+    },
+    { 
+      key: 'editedBy', 
+      label: 'Last Edited By',
+      formatter: (value: string | undefined) => value || '-'
+    },
+    { 
+      key: 'updatedAt', 
+      label: 'Last Updated',
+      formatter: (value: Date | undefined) => value ? formatDateTime(new Date(value)) : '-'
     }
   ], []);
 
@@ -96,7 +106,7 @@ const Transfer = () => {
     { value: 'KUCOIN SS', label: 'KUCOIN SS' },
     { value: 'KUCOIN AS', label: 'KUCOIN AS' },
   ];
-  
+
   // Compute platform totals
   const platformTotals = useMemo(() => {
     const totals = new Map();
