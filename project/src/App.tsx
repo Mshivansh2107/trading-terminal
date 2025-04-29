@@ -125,8 +125,8 @@ function App() {
               <Route path="/expenses" element={
                 <ProtectedRoute>
                   <Expenses />
-                </ProtectedRoute>
-              } />
+              </ProtectedRoute>
+            } />
             
             <Route path="/stats" element={
               <ProtectedRoute>
@@ -139,7 +139,7 @@ function App() {
                 <AdminRoute>
                   <AdminUsers />
                 </AdminRoute>
-              } />
+            } />
             
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

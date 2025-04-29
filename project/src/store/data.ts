@@ -7,7 +7,9 @@ import {
   BankTransferEntry,
   ExpenseEntry,
   DashboardData,
-  StatsData
+  StatsData,
+  Platform,
+  Bank
 } from '../types';
 import { 
   calculateNetSales, 
@@ -1154,6 +1156,220 @@ export const updateExpenseAtom = atom(
       }
     } catch (error) {
       console.error('Failed to update expense:', error);
+    }
+  }
+);
+
+// Manual stock balance update atom - used for correcting stock quantities
+export const updateStockBalanceAtom = atom(
+  null,
+  async (get, set, data: { platform: string; quantity: number }) => {
+    const { platform, quantity } = data;
+    const purchases = get(purchasesAtom);
+    const sales = get(salesAtom);
+    const transfers = get(transfersAtom);
+    const authState = get(authStateAtom);
+    
+    try {
+      console.log('Starting stock balance update for platform:', platform);
+      
+      // Calculate current stock
+      const currentStock = calculateStockBalance(purchases, sales, transfers, platform);
+      console.log('Current stock:', currentStock, 'Target quantity:', quantity);
+      
+      // Calculate the difference needed to reach the target quantity
+      const difference = quantity - currentStock;
+      console.log('Difference to adjust:', difference);
+      
+      if (difference === 0) {
+        console.log('No adjustment needed, stocks already match');
+        return; // No adjustment needed
+      }
+      
+      // Create an adjustment transfer record
+      // Since we need a valid Platform type, create a new transfer between existing platforms
+      const validPlatforms = ['BINANCE SS', 'BINANCE AS', 'BYBIT SS', 'BYBIT AS', 'BITGET SS', 'BITGET AS', 'KUCOIN SS', 'KUCOIN AS'] as const;
+      
+      // Create a transfer between the target platform and another platform as needed
+      let transferParams;
+      if (difference > 0) {
+        // We need to add stock, find a platform that's not the current one
+        const sourcePlatform = validPlatforms.find(p => p !== platform) || 'BINANCE SS';
+        transferParams = {
+          from: sourcePlatform,
+          to: platform as Platform,
+          quantity: Math.abs(difference)
+        };
+        console.log(`Creating transfer FROM ${sourcePlatform} TO ${platform} of ${Math.abs(difference)}`);
+      } else {
+        // We need to reduce stock, find a platform that's not the current one
+        const targetPlatform = validPlatforms.find(p => p !== platform) || 'BINANCE SS';
+        transferParams = {
+          from: platform as Platform,
+          to: targetPlatform,
+          quantity: Math.abs(difference)
+        };
+        console.log(`Creating transfer FROM ${platform} TO ${targetPlatform} of ${Math.abs(difference)}`);
+      }
+      
+      // Create a transfer with an ID and timestamp
+      const transferWithId: TransferEntry = {
+        ...transferParams,
+        id: crypto.randomUUID(),
+        createdAt: new Date()
+      };
+      
+      console.log('Transfer record created:', transferWithId);
+      
+      // Update in local storage
+      set(transfersAtom, [...transfers, transferWithId]);
+      console.log('Local state updated with new transfer');
+      
+      // Save to Supabase with notes indicating this is a manual adjustment
+      console.log('Saving to Supabase...');
+      
+      const supabaseTransferData = {
+        id: transferWithId.id,
+        from_platform: transferWithId.from,
+        to_platform: transferWithId.to,
+        quantity: transferWithId.quantity,
+        created_at: transferWithId.createdAt.toISOString(),
+        user_id: authState.user?.id || null,
+        username: authState.user?.email || null,
+        notes: `Manual stock adjustment to set ${platform} balance to ${quantity}`
+      };
+      
+      console.log('Transfer data to save:', supabaseTransferData);
+      
+      const { error } = await supabase
+        .from('transfers')
+        .insert(supabaseTransferData);
+      
+      if (error) {
+        console.error('Error saving stock adjustment to Supabase:', error);
+        throw error;
+      }
+      
+      console.log('Stock adjustment successfully saved to Supabase');
+      
+      // Verify the transfer was saved by fetching the record
+      const { data: verificationData, error: verificationError } = await supabase
+        .from('transfers')
+        .select('*')
+        .eq('id', transferWithId.id)
+        .single();
+        
+      if (verificationError) {
+        console.error('Verification failed, transfer may not be saved:', verificationError);
+      } else {
+        console.log('Verified transfer was saved:', verificationData);
+      }
+      
+      return transferWithId;
+    } catch (error) {
+      console.error('Error adjusting stock balance:', error);
+      throw error;
+    }
+  }
+);
+
+// Manual cash balance update atom - used for correcting bank balances
+export const updateCashBalanceAtom = atom(
+  null,
+  async (get, set, data: { bank: string; amount: number }) => {
+    const { bank, amount } = data;
+    const sales = get(salesAtom);
+    const purchases = get(purchasesAtom);
+    const expenses = get(expensesAtom);
+    const authState = get(authStateAtom);
+    
+    try {
+      console.log('Starting cash balance update for bank:', bank);
+      
+      // Calculate current bank balance
+      const currentAmount = 
+        sales.filter(s => s.bank === bank).reduce((sum, s) => sum + s.totalPrice, 0) -
+        purchases.filter(p => p.bank === bank).reduce((sum, p) => sum + p.totalPrice, 0) +
+        expenses.filter(e => e.bank === bank && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
+        expenses.filter(e => e.bank === bank && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0);
+      
+      console.log('Current bank amount:', currentAmount, 'Target amount:', amount);
+      
+      // Calculate the difference needed to reach the target amount
+      const difference = amount - currentAmount;
+      console.log('Difference to adjust:', difference);
+      
+      if (difference === 0) {
+        console.log('No adjustment needed, amounts already match');
+        return; // No adjustment needed
+      }
+      
+      // Use type assertion to treat the bank string as a valid Bank type
+      // Assuming the bank parameter is one of the valid Bank types
+      const validBank = bank as Bank;
+      
+      // Create an expense/income entry based on the difference
+      const expenseWithId: ExpenseEntry = {
+        id: crypto.randomUUID(),
+        createdAt: new Date(),
+        bank: validBank,
+        amount: Math.abs(difference),
+        type: difference > 0 ? 'income' : 'expense',
+        category: 'Manual Adjustment',
+        description: `Manual adjustment to set ${bank} balance to ${amount}`
+      };
+      
+      console.log('Expense/income record created:', expenseWithId);
+      
+      // Update in local storage
+      set(expensesAtom, [...expenses, expenseWithId]);
+      console.log('Local state updated with new expense/income');
+      
+      // Save to Supabase
+      console.log('Saving to Supabase...');
+      
+      const supabaseExpenseData = {
+        id: expenseWithId.id,
+        bank: expenseWithId.bank,
+        amount: expenseWithId.amount,
+        type: expenseWithId.type,
+        category: expenseWithId.category,
+        description: expenseWithId.description,
+        created_at: expenseWithId.createdAt.toISOString(),
+        user_id: authState.user?.id || null,
+        username: authState.user?.email || null
+      };
+      
+      console.log('Expense data to save:', supabaseExpenseData);
+      
+      const { error } = await supabase
+        .from('expenses')
+        .insert(supabaseExpenseData);
+      
+      if (error) {
+        console.error('Error saving cash adjustment to Supabase:', error);
+        throw error;
+      }
+      
+      console.log('Cash adjustment successfully saved to Supabase');
+      
+      // Verify the expense was saved by fetching the record
+      const { data: verificationData, error: verificationError } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('id', expenseWithId.id)
+        .single();
+        
+      if (verificationError) {
+        console.error('Verification failed, expense may not be saved:', verificationError);
+      } else {
+        console.log('Verified expense was saved:', verificationData);
+      }
+      
+      return expenseWithId;
+    } catch (error) {
+      console.error('Error adjusting cash balance:', error);
+      throw error;
     }
   }
 );
