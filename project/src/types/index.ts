@@ -15,7 +15,7 @@ export type SalesEntry = {
   orderNumber: string;
   bank: Bank;
   orderType: string;
-  assetType: string;
+  assetType: string; 
   fiatType: Currency;
   totalPrice: number;
   price: number;

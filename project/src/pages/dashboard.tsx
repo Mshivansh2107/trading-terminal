@@ -19,7 +19,7 @@ import {
   Cell,
   ComposedChart
 } from 'recharts';
-import { dashboardDataAtom, refreshDataAtom, statsDataAtom, settingsAtom, salesAtom, purchasesAtom, transfersAtom } from '../store/data';
+import { dashboardDataAtom, refreshDataAtom, statsDataAtom, settingsAtom, salesAtom, purchasesAtom, transfersAtom, updateStockBalanceAtom, updateCashBalanceAtom } from '../store/data';
 import DashboardCard from '../components/layout/dashboard-card';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { formatCurrency, formatQuantity, prepareExportData } from '../lib/utils';
@@ -30,7 +30,9 @@ import {
   BarChart2,
   Settings,
   DatabaseIcon,
-  Download
+  Download,
+  Edit,
+  Plus
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { authStateAtom } from '../store/supabaseAuth';
@@ -38,6 +40,10 @@ import SettingsModal from '../components/settings-modal';
 import ErrorBoundary from '../components/error-boundary';
 import { CSVLink } from "react-csv";
 import { Transaction } from "../types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
 const Dashboard = () => {
   const [dashboardData] = useAtom(dashboardDataAtom);
@@ -302,6 +308,81 @@ const Dashboard = () => {
   // Add at the top with other state declarations
   const lastTooltipIndex = useRef<number>(0);
 
+  // Add these state variables to the Dashboard component after the existing ones
+  const [stockUpdateOpen, setStockUpdateOpen] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState('');
+  const [newStockBalance, setNewStockBalance] = useState('');
+  const [cashUpdateOpen, setCashUpdateOpen] = useState(false);
+  const [selectedBank, setSelectedBank] = useState('');
+  const [newCashBalance, setNewCashBalance] = useState('');
+  const [, updateStockBalance] = useAtom(updateStockBalanceAtom);
+  const [, updateCashBalance] = useAtom(updateCashBalanceAtom);
+
+  // Add these functions to handle manual updates
+  const handleStockUpdateOpen = (platform: string, currentQuantity: number) => {
+    setSelectedPlatform(platform);
+    setNewStockBalance(currentQuantity.toString());
+    setStockUpdateOpen(true);
+  };
+
+  const handleCashUpdateOpen = (bank: string, currentAmount: number) => {
+    setSelectedBank(bank);
+    setNewCashBalance(currentAmount.toString());
+    setCashUpdateOpen(true);
+  };
+
+  const handleStockUpdate = async () => {
+    if (!selectedPlatform || isNaN(Number(newStockBalance))) {
+      console.log("Invalid input");
+      return;
+    }
+
+    try {
+      console.log(`Attempting to update ${selectedPlatform} stock to ${newStockBalance}...`);
+      
+      await updateStockBalance({
+        platform: selectedPlatform,
+        quantity: Number(newStockBalance)
+      });
+      
+      console.log(`${selectedPlatform} stock has been updated successfully.`);
+      
+      // Force refresh data from backend to verify the update
+      setStockUpdateOpen(false);
+      console.log("Refreshing data to verify update...");
+      await handleRefresh();
+      console.log("Data refresh complete");
+    } catch (error) {
+      console.log("Failed to update stock balance:", error);
+    }
+  };
+
+  const handleCashUpdate = async () => {
+    if (!selectedBank || isNaN(Number(newCashBalance))) {
+      console.log("Invalid input");
+      return;
+    }
+
+    try {
+      console.log(`Attempting to update ${selectedBank} balance to ${newCashBalance}...`);
+      
+      await updateCashBalance({
+        bank: selectedBank,
+        amount: Number(newCashBalance)
+      });
+      
+      console.log(`${selectedBank} balance has been updated successfully.`);
+      
+      // Force refresh data from backend to verify the update
+      setCashUpdateOpen(false);
+      console.log("Refreshing data to verify update...");
+      await handleRefresh();
+      console.log("Data refresh complete");
+    } catch (error) {
+      console.log("Failed to update cash balance:", error);
+    }
+  };
+
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
       {/* Header with user info and refresh button */}
@@ -474,8 +555,8 @@ const Dashboard = () => {
                     Last 14 days
                   </div>
                 </CardTitle>
-              </CardHeader>
-              <CardContent>
+          </CardHeader>
+          <CardContent>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={defaultChartData}>
@@ -586,9 +667,9 @@ const Dashboard = () => {
                       />
                     </PieChart>
                   </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
+            </div>
+          </CardContent>
+        </Card>
           </div>
         </>
       )}
@@ -597,8 +678,21 @@ const Dashboard = () => {
         <>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <Card className="lg:col-span-2 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Stock Inventory</CardTitle>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    setSelectedPlatform('');
+                    setNewStockBalance('0');
+                    setStockUpdateOpen(true);
+                  }}
+                  className="flex items-center gap-1"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Stock
+                </Button>
           </CardHeader>
           <CardContent>
                 <div className="overflow-x-auto">
@@ -608,6 +702,7 @@ const Dashboard = () => {
                         <th className="py-2 px-4 text-left font-medium text-gray-500">Platform</th>
                         <th className="py-2 px-4 text-right font-medium text-gray-500">Quantity</th>
                         <th className="py-2 px-4 text-right font-medium text-gray-500">Status</th>
+                        <th className="py-2 px-4 text-right font-medium text-gray-500">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -625,6 +720,15 @@ const Dashboard = () => {
                             }`}>
                               {stock.quantity > 0 ? 'In Stock' : stock.quantity < 0 ? 'Overdrawn' : 'Empty'}
                             </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleStockUpdateOpen(stock.platform, stock.quantity)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
                           </td>
                         </tr>
                       ))}
@@ -681,16 +785,30 @@ const Dashboard = () => {
         <>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <Card className="lg:col-span-2 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Cash Balances</CardTitle>
-          </CardHeader>
-          <CardContent>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    setSelectedBank('');
+                    setNewCashBalance('0');
+                    setCashUpdateOpen(true);
+                  }}
+                  className="flex items-center gap-1"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Cash Account
+                </Button>
+              </CardHeader>
+              <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b">
                         <th className="py-2 px-4 text-left font-medium text-gray-500">Bank</th>
                         <th className="py-2 px-4 text-right font-medium text-gray-500">Amount</th>
+                        <th className="py-2 px-4 text-right font-medium text-gray-500">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -700,6 +818,15 @@ const Dashboard = () => {
                           <td className="py-3 px-4 text-right font-medium">
                             {formatCurrency(cash.amount)}
                           </td>
+                          <td className="py-3 px-4 text-right">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleCashUpdateOpen(cash.bank, cash.amount)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </td>
                         </tr>
                       ))}
                       <tr className="bg-gray-50">
@@ -707,6 +834,7 @@ const Dashboard = () => {
                         <td className="py-3 px-4 text-right font-bold">
                           {formatCurrency(dashboardData.totalCash)}
                         </td>
+                        <td></td>
                       </tr>
                     </tbody>
                   </table>
@@ -834,16 +962,16 @@ const Dashboard = () => {
                       isAnimationActive={false}
                     />
                   </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
               <CardTitle>Stock Distribution</CardTitle>
-            </CardHeader>
-            <CardContent>
+          </CardHeader>
+          <CardContent>
               <div ref={stockChartRef} className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -866,7 +994,7 @@ const Dashboard = () => {
               </div>
             </CardContent>
           </Card>
-        </div>
+            </div>
       )}
 
       {activeTab === 'cash' && (
@@ -877,29 +1005,163 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div ref={cashChartRef} className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dashboardData.cashList}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="bank" />
-                    <YAxis />
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dashboardData.cashList}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="bank" />
+                  <YAxis />
                     <Tooltip formatter={(value) => formatCurrency(value as number)} />
                     <Bar dataKey="amount" fill={colors[0]} name="Amount">
                       {dashboardData.cashList.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                       ))}
                     </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       )}
 
       {/* Settings Modal */}
       <ErrorBoundary>
         <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
       </ErrorBoundary>
+
+      {/* Stock Update Modal */}
+      <Dialog open={stockUpdateOpen} onOpenChange={setStockUpdateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Stock Balance</DialogTitle>
+            <DialogDescription>
+              Enter the new stock quantity for the selected platform.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="platform" className="text-right">
+                Platform
+              </Label>
+              <div className="col-span-3">
+                {selectedPlatform ? (
+                  <Input
+                    id="platform"
+                    value={selectedPlatform}
+                    disabled
+                  />
+                ) : (
+                  <select
+                    id="platform"
+                    value={selectedPlatform}
+                    onChange={(e) => setSelectedPlatform(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="" disabled>Select platform</option>
+                    <option value="BINANCE AS">BINANCE AS</option>
+                    <option value="BYBIT AS">BYBIT AS</option>
+                    <option value="BITGET AS">BITGET AS</option>
+                    <option value="KUCOIN AS">KUCOIN AS</option>
+                    <option value="BINANCE SS">BINANCE SS</option>
+                    <option value="BYBIT SS">BYBIT SS</option>
+                    <option value="BITGET SS">BITGET SS</option>
+                    <option value="KUCOIN SS">KUCOIN SS</option>
+                  </select>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="quantity" className="text-right">
+                Quantity
+              </Label>
+              <Input
+                id="quantity"
+                type="number"
+                value={newStockBalance}
+                onChange={(e) => setNewStockBalance(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStockUpdateOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleStockUpdate}>
+              Update Stock
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Cash Update Modal */}
+      <Dialog open={cashUpdateOpen} onOpenChange={setCashUpdateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Cash Balance</DialogTitle>
+            <DialogDescription>
+              Enter the new cash amount for the selected bank account.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="bank" className="text-right">
+                Bank
+              </Label>
+              <div className="col-span-3">
+                {selectedBank ? (
+                  <Input
+                    id="bank"
+                    value={selectedBank}
+                    disabled
+                  />
+                ) : (
+                  <select
+                    id="bank"
+                    value={selectedBank}
+                    onChange={(e) => setSelectedBank(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="" disabled>Select bank</option>
+                    <option value="IDBI">IDBI</option>
+                    <option value="INDUSIND SS">INDUSIND SS</option>
+                    <option value="HDFC CAA SS">HDFC CAA SS</option>
+                    <option value="BOB SS">BOB SS</option>
+                    <option value="CANARA SS">CANARA SS</option>
+                    <option value="HDFC SS">HDFC SS</option>
+                    <option value="INDUSIND BLYNK">INDUSIND BLYNK</option>
+                    <option value="PNB">PNB</option>
+                  </select>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="amount" className="text-right">
+                Amount
+              </Label>
+              <Input
+                id="amount"
+                type="number"
+                value={newCashBalance}
+                onChange={(e) => setNewCashBalance(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCashUpdateOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCashUpdate}>
+              Update Balance
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
