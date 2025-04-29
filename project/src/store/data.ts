@@ -294,6 +294,10 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
     requiredMargin,
     netCash,
     netCashAfterSales,
+    salesByBank: bankBalances.map(cash => ({
+      bank: cash.bank,
+      total: cash.amount
+    })),
   };
 });
 

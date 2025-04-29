@@ -106,14 +106,14 @@ const BankTransfer = () => {
   ], [handleEdit, handleDelete]);
   
   const banks = [
-    { value: 'UPHOLD', label: 'UPHOLD' },
-    { value: 'BCP', label: 'BCP' },
-    { value: 'YAPE', label: 'YAPE' },
-    { value: 'METALPAY', label: 'METALPAY' },
-    { value: 'PLIN', label: 'PLIN' },
-    { value: 'STRIKE', label: 'STRIKE' },
-    { value: 'BBVA', label: 'BBVA' },
-    { value: 'INTERBANK', label: 'INTERBANK' },
+    { value: 'IDBI', label: 'IDBI' },
+    { value: 'INDUSIND SS', label: 'INDUSIND SS' },
+    { value: 'HDFC CAA SS', label: 'HDFC CAA SS' },
+    { value: 'BOB SS', label: 'BOB SS' },
+    { value: 'CANARA SS', label: 'CANARA SS' },
+    { value: 'HDFC SS', label: 'HDFC SS' },
+    { value: 'INDUSIND BLYNK', label: 'INDUSIND BLYNK' },
+    { value: 'PNB', label: 'PNB' },
   ];
   
   const accounts = [
