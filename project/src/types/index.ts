@@ -157,3 +157,11 @@ export type StatsData = {
     amount: number;
   }[];
 }
+
+export interface Transaction {
+  id: string;
+  date: string;
+  totalPrice: number;
+  isIncome?: boolean;
+  bank: string;
+}

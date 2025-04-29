@@ -83,3 +83,56 @@ export function calculateStockBalance(
   
   return purchased - sold - transferredFrom + transferredTo;
 }
+
+export function prepareExportData(sales: any[], purchases: any[], transfers: any[]) {
+  // Format sales data
+  const formattedSales = sales.map(sale => ({
+    type: 'SALE',
+    orderNumber: sale.orderNumber,
+    bank: sale.bank,
+    platform: sale.platform,
+    totalPrice: sale.totalPrice,
+    price: sale.price,
+    quantity: sale.quantity,
+    name: sale.name,
+    contactNo: sale.contactNo || '',
+    createdAt: formatDateTime(new Date(sale.createdAt)),
+    editedBy: sale.editedBy || '',
+    updatedAt: sale.updatedAt ? formatDateTime(new Date(sale.updatedAt)) : ''
+  }));
+
+  // Format purchase data
+  const formattedPurchases = purchases.map(purchase => ({
+    type: 'PURCHASE',
+    orderNumber: purchase.orderNumber,
+    bank: purchase.bank,
+    platform: purchase.platform,
+    totalPrice: purchase.totalPrice,
+    price: purchase.price,
+    quantity: purchase.quantity,
+    name: purchase.name,
+    contactNo: purchase.contactNo || '',
+    createdAt: formatDateTime(new Date(purchase.createdAt)),
+    editedBy: purchase.editedBy || '',
+    updatedAt: purchase.updatedAt ? formatDateTime(new Date(purchase.updatedAt)) : ''
+  }));
+
+  // Format transfer data
+  const formattedTransfers = transfers.map(transfer => ({
+    type: 'TRANSFER',
+    orderNumber: '-',
+    bank: '-',
+    platform: `${transfer.from} → ${transfer.to}`,
+    totalPrice: '-',
+    price: '-',
+    quantity: transfer.quantity,
+    name: '-',
+    contactNo: '-',
+    createdAt: formatDateTime(new Date(transfer.createdAt)),
+    editedBy: transfer.editedBy || '',
+    updatedAt: transfer.updatedAt ? formatDateTime(new Date(transfer.updatedAt)) : ''
+  }));
+
+  // Combine all data
+  return [...formattedSales, ...formattedPurchases, ...formattedTransfers];
+}

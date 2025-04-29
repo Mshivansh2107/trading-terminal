@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAtom } from 'jotai';
 import { authStateAtom, initSupabaseSessionAtom } from './store/supabaseAuth';
-import { refreshDataAtom } from './store/data';
+import { refreshDataAtom, syncSettingsAtom, autoFetchUsdPriceAtom } from './store/data';
 import { ToastProvider } from './components/ui/toast';
 
 // Pages
@@ -54,6 +54,8 @@ function App() {
   const [authState] = useAtom(authStateAtom);
   const [, initSession] = useAtom(initSupabaseSessionAtom);
   const [, refreshData] = useAtom(refreshDataAtom);
+  const [, syncSettings] = useAtom(syncSettingsAtom);
+  const [, autoFetchPrice] = useAtom(autoFetchUsdPriceAtom);
   
   useEffect(() => {
     // Initialize auth state from Supabase on app load
@@ -61,11 +63,22 @@ function App() {
   }, [initSession]);
   
   useEffect(() => {
-    // Load data from Supabase when authenticated
+    // Load data and settings from Supabase when authenticated
     if (authState.isAuthenticated) {
-      refreshData().catch(err => console.error('Error refreshing data:', err));
+      Promise.all([
+        refreshData(),
+        syncSettings(),
+        autoFetchPrice()
+      ]).catch(err => console.error('Error initializing data:', err));
+      
+      // Set up auto-fetch interval for USD price
+      const interval = setInterval(() => {
+        autoFetchPrice().catch(err => console.error('Error auto-fetching price:', err));
+      }, 60000); // Fetch every minute
+      
+      return () => clearInterval(interval);
     }
-  }, [authState.isAuthenticated, refreshData]);
+  }, [authState.isAuthenticated, refreshData, syncSettings, autoFetchPrice]);
   
   return (
     <Router>
