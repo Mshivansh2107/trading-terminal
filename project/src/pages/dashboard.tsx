@@ -44,6 +44,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import DateRangeFilter from '../components/date-range-filter';
+import { dateRangeAtom } from '../store/filters';
 
 const Dashboard = () => {
   const [dashboardData] = useAtom(dashboardDataAtom);
@@ -383,6 +385,9 @@ const Dashboard = () => {
     }
   };
 
+  // Add this line near the top of the Dashboard component where other state declarations are
+  const [dateRange] = useAtom(dateRangeAtom);
+
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
       {/* Header with user info and refresh button */}
@@ -392,7 +397,9 @@ const Dashboard = () => {
           <p className="text-gray-500">Welcome back, {authState.user?.email?.split('@')[0] || 'User'}!</p>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <DateRangeFilter />
+          
           <Button 
             variant="outline" 
             size="sm"

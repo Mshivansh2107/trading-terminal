@@ -123,3 +123,61 @@ npm run dev
 ```
 
 Visit `http://localhost:3000` to view the application. 
+
+## Date Filtering Feature
+
+### Installation
+
+1. Run the installation script:
+   ```bash
+   bash install-date-filter.sh
+   ```
+
+2. This will install:
+   - `react-datepicker` and `date-fns` for date handling
+   - `@radix-ui/react-popover` for popover UI components
+   - `clsx` and `tailwind-merge` for CSS class utilities
+
+### Components Added
+
+1. **Date Range Filter Component**
+   - A reusable date picker with preset options like "Today", "Last 7 Days", etc.
+   - Can be easily added to any page
+
+2. **Filter Store**
+   - Global date range state using Jotai atoms
+   - Filtered data access across the application
+
+### Usage
+
+1. Add the date filter to a page:
+   ```jsx
+   import DateRangeFilter from '../components/date-range-filter';
+   
+   // Inside your component's JSX
+   <DateRangeFilter />
+   ```
+
+2. Filter data by date in any component:
+   ```jsx
+   import { useAtom } from 'jotai';
+   import { filterByDateAtom } from '../store/filters';
+   
+   // In your component
+   const [filterByDate] = useAtom(filterByDateAtom);
+   const filteredData = filterByDate(yourData);
+   ```
+
+3. Check if date filtering is active:
+   ```jsx
+   import { dateRangeAtom } from '../store/filters';
+   
+   const [dateRange] = useAtom(dateRangeAtom);
+   
+   // In your JSX
+   {dateRange.isActive && <p>Filtered by date!</p>}
+   ```
+
+## Troubleshooting
+
+If you encounter UI component errors, ensure you've installed all dependencies from the installation script. 
