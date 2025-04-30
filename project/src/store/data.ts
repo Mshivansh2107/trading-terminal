@@ -405,10 +405,10 @@ export const statsDataAtom = atom<StatsData>((get) => {
         existingDate.amount += income.amount;
       } else {
         acc.push({ date: dateString, isoDate, amount: income.amount });
-      }
-      
-      return acc;
-    }, []);
+    }
+    
+    return acc;
+  }, []);
   
   // Calculate sales by bank
   const salesByBank = [

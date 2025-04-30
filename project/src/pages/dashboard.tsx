@@ -1155,8 +1155,8 @@ const Dashboard = () => {
                 value={newCashBalance}
                 onChange={(e) => setNewCashBalance(e.target.value)}
                 className="col-span-3"
-              />
-            </div>
+        />
+      </div>
           </div>
           
           <DialogFooter>

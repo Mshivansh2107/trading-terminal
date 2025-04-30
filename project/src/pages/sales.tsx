@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAtom } from 'jotai';
 import { salesAtom, addSaleAtom, updateSaleAtom, deleteSaleAtom } from '../store/data';
 import { formatCurrency, formatQuantity, formatDateTime, generateOrderNumber } from '../lib/utils';
@@ -18,6 +18,49 @@ const Sales = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingSale, setEditingSale] = useState<SalesEntry | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  
+  // Form state for calculations
+  const [totalPrice, setTotalPrice] = useState<string>('');
+  const [price, setPrice] = useState<string>('');
+  const [quantity, setQuantity] = useState<string>('');
+  const [isManualQuantity, setIsManualQuantity] = useState(false);
+  
+  // Auto-calculate quantity when total price or price changes
+  useEffect(() => {
+    if (!isManualQuantity && totalPrice && price && parseFloat(price) > 0) {
+      const calculatedQuantity = parseFloat(totalPrice) / parseFloat(price);
+      // Format to 8 decimal places maximum
+      setQuantity(calculatedQuantity.toFixed(8));
+    }
+  }, [totalPrice, price, isManualQuantity]);
+  
+  // Handle manual quantity change
+  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setIsManualQuantity(true);
+    setQuantity(e.target.value);
+  };
+  
+  // Handle total price change
+  const handleTotalPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTotalPrice(e.target.value);
+    setIsManualQuantity(false);
+  };
+  
+  // Handle price change
+  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPrice(e.target.value);
+    setIsManualQuantity(false);
+  };
+  
+  // Reset form fields when form is closed/opened
+  useEffect(() => {
+    if (showForm) {
+      setTotalPrice('');
+      setPrice('');
+      setQuantity('');
+      setIsManualQuantity(false);
+    }
+  }, [showForm]);
   
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -206,7 +249,9 @@ const Sales = () => {
                   inputProps={{ 
                     step: "0.01",
                     min: "0",
-                    placeholder: "Enter Total Price"
+                    placeholder: "Enter Total Price",
+                    value: totalPrice,
+                    onChange: handleTotalPriceChange
                   }}
                 />
                 
@@ -218,7 +263,9 @@ const Sales = () => {
                   inputProps={{ 
                     step: "0.01",
                     min: "0",
-                    placeholder: "Enter Price"
+                    placeholder: "Enter Price",
+                    value: price,
+                    onChange: handlePriceChange
                   }}
                 />
                 
@@ -230,7 +277,9 @@ const Sales = () => {
                   inputProps={{ 
                     step: "0.00000001",
                     min: "0",
-                    placeholder: "Enter Quantity"
+                    placeholder: "Enter Quantity or Auto-calculate",
+                    value: quantity,
+                    onChange: handleQuantityChange
                   }}
                 />
                 
@@ -252,16 +301,9 @@ const Sales = () => {
                 />
               </div>
               
-              <div className="mt-6 flex justify-end space-x-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setShowForm(false)}
-                >
-                  Cancel
-                </Button>
+              <div className="flex justify-end mt-4">
                 <Button type="submit">
-                  Save Sale
+                  Submit
                 </Button>
               </div>
             </form>
@@ -269,45 +311,20 @@ const Sales = () => {
         </Card>
       )}
       
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-4">
-          <DataTable 
-            data={sales} 
-            columns={columns} 
-            title="Sales Transactions"
-            csvFilename="sales-data.csv"
-            rowActions={rowActions}
-          />
-        </div>
-        
-        {sales.length > 0 && (
-          <div className="p-4 border-t">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="font-medium">Total Sales:</span>
-                <span className="ml-2 font-bold text-green-600">
-                  {formatCurrency(sales.reduce((sum, sale) => sum + sale.totalPrice, 0))}
-                </span>
-              </div>
-              <div>
-                <span className="font-medium">Number of Transactions:</span>
-                <span className="ml-2 font-bold">{sales.length}</span>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      <DataTable
+        data={sales}
+        columns={columns}
+        rowActions={rowActions}
+        title="Sales List"
+      />
       
-      {/* Edit Transaction Modal */}
       {editingSale && (
         <EditTransactionModal
           open={isEditModalOpen}
           onOpenChange={setIsEditModalOpen}
-          onSave={handleSaveEdit}
           data={editingSale}
+          onSave={handleSaveEdit}
           type="sale"
-          platforms={platforms}
-          banks={banks}
         />
       )}
     </div>
