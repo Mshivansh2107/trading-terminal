@@ -8,7 +8,7 @@ import { Label } from '../components/ui/label';
 import { Select2 as Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { PlusCircle, Wallet, DollarSign, Edit, Delete, Minus, PencilIcon, TrashIcon } from 'lucide-react';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { expensesAtom, addExpenseAtom, updateExpenseAtom, deleteExpenseAtom } from '../store/data';
+import { expensesAtom, addExpenseAtom, updateExpenseAtom, deleteExpenseAtom, banksAtom } from '../store/data';
 import { ExpenseEntry, Bank } from '../types';
 import DeleteConfirmationDialog from '../components/delete-confirmation-dialog';
 
@@ -35,17 +35,17 @@ const INCOME_CATEGORIES = [
   'Other',
 ];
 
-// List of banks as defined in the Bank type
-const BANKS: Bank[] = [
-  'IDBI',
-  'INDUSIND SS',
-  'HDFC CAA SS',
-  'BOB SS',
-  'CANARA SS',
-  'HDFC SS',
-  'INDUSIND BLYNK',
-  'PNB'
-];
+// We'll use dynamic banks instead of this static list
+// const BANKS: Bank[] = [
+//   'IDBI',
+//   'INDUSIND SS',
+//   'HDFC CAA SS',
+//   'BOB SS',
+//   'CANARA SS',
+//   'HDFC SS',
+//   'INDUSIND BLYNK',
+//   'PNB'
+// ];
 
 export default function Expenses() {
   // State for expenses and form visibility
@@ -53,8 +53,29 @@ export default function Expenses() {
   const [, addExpense] = useAtom(addExpenseAtom);
   const [, updateExpense] = useAtom(updateExpenseAtom);
   const [, deleteExpense] = useAtom(deleteExpenseAtom);
+  const [banks] = useAtom(banksAtom);
   const [showForm, setShowForm] = useState(false);
   const [transactionType, setTransactionType] = useState<'expense' | 'income'>('expense');
+
+  // Dynamic banks from banksAtom
+  const BANKS = useMemo(() => {
+    if (banks && banks.length > 0) {
+      return banks
+        .filter(bank => bank.isActive)
+        .map(bank => bank.name as Bank);
+    }
+    // Fallback banks
+    return [
+      'IDBI',
+      'INDUSIND SS',
+      'HDFC CAA SS',
+      'BOB SS',
+      'CANARA SS',
+      'HDFC SS',
+      'INDUSIND BLYNK',
+      'PNB'
+    ] as Bank[];
+  }, [banks]);
 
   // State for form inputs
   const [formData, setFormData] = useState({
@@ -311,12 +332,12 @@ export default function Expenses() {
 
                 <div className="space-y-2">
                   <Label htmlFor="bank">Bank/Account</Label>
-                  <Select 
-                    value={formData.bank} 
-                    onValueChange={(value: string) => setFormData({...formData, bank: value as Bank})}
+                  <Select
+                    value={formData.bank}
+                    onValueChange={(value) => setFormData({ ...formData, bank: value as Bank })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select bank" />
+                      <SelectValue placeholder="Select a bank" />
                     </SelectTrigger>
                     <SelectContent>
                       {BANKS.map((bank) => (

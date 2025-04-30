@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAtom } from 'jotai';
-import { salesAtom, addSaleAtom, updateSaleAtom, deleteSaleAtom } from '../store/data';
+import { salesAtom, addSaleAtom, updateSaleAtom, deleteSaleAtom, banksAtom } from '../store/data';
 import { formatCurrency, formatQuantity, formatDateTime, generateOrderNumber } from '../lib/utils';
 import DataTable from '../components/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -15,6 +15,7 @@ const Sales = () => {
   const [, addSale] = useAtom(addSaleAtom);
   const [, updateSale] = useAtom(updateSaleAtom);
   const [, deleteSale] = useAtom(deleteSaleAtom);
+  const [banks] = useAtom(banksAtom);
   const [showForm, setShowForm] = useState(false);
   const [editingSale, setEditingSale] = useState<SalesEntry | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -171,16 +172,30 @@ const Sales = () => {
     { value: 'KUCOIN AS', label: 'KUCOIN AS' },
   ];
   
-  const banks = [
-    { value: 'IDBI', label: 'IDBI' },
-    { value: 'INDUSIND SS', label: 'INDUSIND SS' },
-    { value: 'HDFC CAA SS', label: 'HDFC CAA SS' },
-    { value: 'BOB SS', label: 'BOB SS' },
-    { value: 'CANARA SS', label: 'CANARA SS' },
-    { value: 'HDFC SS', label: 'HDFC SS' },
-    { value: 'INDUSIND BLYNK', label: 'INDUSIND BLYNK' },
-    { value: 'PNB', label: 'PNB' },
-  ];
+  // Add a useMemo hook to get dynamic bank options
+  const bankOptions = useMemo(() => {
+    // Use banks from the store if available
+    if (banks && banks.length > 0) {
+      return banks
+        .filter(bank => bank.isActive)
+        .map(bank => ({
+          value: bank.name,
+          label: bank.name
+        }));
+    }
+    
+    // Fallback to hardcoded banks if no data is available
+    return [
+      { value: 'IDBI', label: 'IDBI' },
+      { value: 'INDUSIND SS', label: 'INDUSIND SS' },
+      { value: 'HDFC CAA SS', label: 'HDFC CAA SS' },
+      { value: 'BOB SS', label: 'BOB SS' },
+      { value: 'CANARA SS', label: 'CANARA SS' },
+      { value: 'HDFC SS', label: 'HDFC SS' },
+      { value: 'INDUSIND BLYNK', label: 'INDUSIND BLYNK' },
+      { value: 'PNB', label: 'PNB' },
+    ];
+  }, [banks]);
   
   const currencies = [
     { value: 'USDT', label: 'USDT' },
@@ -213,7 +228,7 @@ const Sales = () => {
                   name="bank"
                   type="select"
                   required
-                  options={banks}
+                  options={bankOptions}
                 />
                 
                 <FormField

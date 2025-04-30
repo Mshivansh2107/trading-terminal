@@ -9,7 +9,8 @@ import {
   DashboardData,
   StatsData,
   Platform,
-  Bank
+  Bank,
+  BankEntity
 } from '../types';
 import { 
   calculateNetSales, 
@@ -22,6 +23,7 @@ import { supabase } from '../lib/supabase';
 import { authStateAtom } from './supabaseAuth';
 import { getUsdtPrice } from '../lib/usdtPrice';
 import { filterByDateAtom, isDateInRangeAtom, dateRangeAtom } from './filters';
+import { formatDate } from '../lib/utils';
 
 // Initial data store
 export const salesAtom = atomWithStorage<SalesEntry[]>('salesData', []);
@@ -204,16 +206,17 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   };
   
   // Calculate stock balances using the adjusted method
-  const stockList = [
-    { platform: 'BINANCE AS' as const, quantity: calculateAdjustedStockBalance('BINANCE AS') },
-    { platform: 'BYBIT AS' as const, quantity: calculateAdjustedStockBalance('BYBIT AS') },
-    { platform: 'BITGET AS' as const, quantity: calculateAdjustedStockBalance('BITGET AS') },
-    { platform: 'KUCOIN AS' as const, quantity: calculateAdjustedStockBalance('KUCOIN AS') },
-    { platform: 'BINANCE SS' as const, quantity: calculateAdjustedStockBalance('BINANCE SS') },
-    { platform: 'BYBIT SS' as const, quantity: calculateAdjustedStockBalance('BYBIT SS') },
-    { platform: 'BITGET SS' as const, quantity: calculateAdjustedStockBalance('BITGET SS') },
-    { platform: 'KUCOIN SS' as const, quantity: calculateAdjustedStockBalance('KUCOIN SS') },
-  ];
+  const mainPlatforms = [
+    'BINANCE AS', 'BYBIT AS', 'BITGET AS', 'KUCOIN AS',
+    'BINANCE SS', 'BYBIT SS', 'BITGET SS', 'KUCOIN SS'
+  ] as const;
+  
+  const stockList = mainPlatforms.map(platform => ({
+    platform: platform as Platform,
+    quantity: calculateAdjustedStockBalance(platform)
+  }))
+  // Only hide zero quantity platforms if they're not one of our main platforms
+  .filter(stock => stock.quantity !== 0 || mainPlatforms.includes(stock.platform as any));
   
   // Similarly calculate cash balances up to the filter end date
   const calculateAdjustedBankBalance = (bank: Bank) => {
@@ -843,6 +846,9 @@ export const refreshDataAtom = atom(
     }
     
     try {
+      // Fetch banks
+      set(fetchBanksAtom);
+      
       // Fetch sales
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
@@ -1225,29 +1231,24 @@ export const updateStockBalanceAtom = atom(
       }
       
       // Create an adjustment transfer record
-      // Since we need a valid Platform type, create a new transfer between existing platforms
-      const validPlatforms = ['BINANCE SS', 'BINANCE AS', 'BYBIT SS', 'BYBIT AS', 'BITGET SS', 'BITGET AS', 'KUCOIN SS', 'KUCOIN AS'] as const;
-      
-      // Create a transfer between the target platform and another platform as needed
+      // Use a special "ADJUSTMENT" platform that won't affect other real platforms
       let transferParams;
       if (difference > 0) {
-        // We need to add stock, find a platform that's not the current one
-        const sourcePlatform = validPlatforms.find(p => p !== platform) || 'BINANCE SS';
+        // We need to add stock, transfer from ADJUSTMENT to the target platform
         transferParams = {
-          from: sourcePlatform,
+          from: "ADJUSTMENT" as Platform, // Use type assertion to treat as a Platform
           to: platform as Platform,
           quantity: Math.abs(difference)
         };
-        console.log(`Creating transfer FROM ${sourcePlatform} TO ${platform} of ${Math.abs(difference)}`);
+        console.log(`Creating adjustment transfer TO ${platform} of ${Math.abs(difference)}`);
       } else {
-        // We need to reduce stock, find a platform that's not the current one
-        const targetPlatform = validPlatforms.find(p => p !== platform) || 'BINANCE SS';
+        // We need to reduce stock, transfer from the platform to ADJUSTMENT
         transferParams = {
           from: platform as Platform,
-          to: targetPlatform,
+          to: "ADJUSTMENT" as Platform, // Use type assertion to treat as a Platform
           quantity: Math.abs(difference)
         };
-        console.log(`Creating transfer FROM ${platform} TO ${targetPlatform} of ${Math.abs(difference)}`);
+        console.log(`Creating adjustment transfer FROM ${platform} of ${Math.abs(difference)}`);
       }
       
       // Create a transfer with an ID and timestamp
@@ -1407,6 +1408,163 @@ export const updateCashBalanceAtom = atom(
       return expenseWithId;
     } catch (error) {
       console.error('Error adjusting cash balance:', error);
+      throw error;
+    }
+  }
+);
+
+// Banks atom to store bank data globally
+export const banksAtom = atom<BankEntity[]>([]);
+
+// Function to fetch banks from database
+export const fetchBanksAtom = atom(
+  null,
+  async (get, set) => {
+    try {
+      const { data, error } = await supabase
+        .from('banks')
+        .select('*')
+        .order('name', { ascending: true });
+      
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        // Map database results to BankEntity
+        const formattedBanks: BankEntity[] = data.map(bank => ({
+          id: bank.id,
+          name: bank.name,
+          description: bank.description,
+          isActive: bank.is_active,
+          createdAt: new Date(bank.created_at),
+          updatedAt: new Date(bank.updated_at || bank.created_at)
+        }));
+        set(banksAtom, formattedBanks);
+      } else {
+        // Fallback banks if none in database
+        const fallbackBanks: BankEntity[] = [
+          { id: 'idbi', name: 'IDBI', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+          { id: 'indusind-ss', name: 'INDUSIND SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+          { id: 'hdfc-caa-ss', name: 'HDFC CAA SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+          { id: 'bob-ss', name: 'BOB SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+          { id: 'canara-ss', name: 'CANARA SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+          { id: 'hdfc-ss', name: 'HDFC SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+          { id: 'indusind-blynk', name: 'INDUSIND BLYNK', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+          { id: 'pnb', name: 'PNB', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        ];
+        set(banksAtom, fallbackBanks);
+      }
+    } catch (error) {
+      console.error('Error fetching banks:', error);
+      // Use fallback banks on error
+      const fallbackBanks: BankEntity[] = [
+        { id: 'idbi', name: 'IDBI', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'indusind-ss', name: 'INDUSIND SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'hdfc-caa-ss', name: 'HDFC CAA SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'bob-ss', name: 'BOB SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'canara-ss', name: 'CANARA SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'hdfc-ss', name: 'HDFC SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'indusind-blynk', name: 'INDUSIND BLYNK', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'pnb', name: 'PNB', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      ];
+      set(banksAtom, fallbackBanks);
+    }
+  }
+);
+
+// Add bank function
+export const addBankAtom = atom(
+  null,
+  async (get, set, bank: Omit<BankEntity, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const banks = get(banksAtom);
+    const authState = get(authStateAtom);
+    
+    try {
+      const { data, error } = await supabase
+        .from('banks')
+        .insert({
+          name: bank.name,
+          description: bank.description,
+          is_active: bank.isActive
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error adding bank:', error);
+        throw error;
+      }
+      
+      const newBank: BankEntity = {
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        isActive: data.is_active,
+        createdAt: new Date(data.created_at),
+        updatedAt: new Date(data.updated_at)
+      };
+      
+      set(banksAtom, [...banks, newBank]);
+      return newBank;
+    } catch (error) {
+      console.error('Error adding bank:', error);
+      throw error;
+    }
+  }
+);
+
+// Update bank function
+export const updateBankAtom = atom(
+  null,
+  async (get, set, bank: BankEntity) => {
+    const banks = get(banksAtom);
+    
+    try {
+      const { error } = await supabase
+        .from('banks')
+        .update({
+          name: bank.name,
+          description: bank.description,
+          is_active: bank.isActive,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', bank.id);
+      
+      if (error) {
+        console.error('Error updating bank:', error);
+        throw error;
+      }
+      
+      set(banksAtom, banks.map(b => b.id === bank.id ? { ...bank, updatedAt: new Date() } : b));
+      return bank;
+    } catch (error) {
+      console.error('Error updating bank:', error);
+      throw error;
+    }
+  }
+);
+
+// Delete bank function
+export const deleteBankAtom = atom(
+  null,
+  async (get, set, bankId: string) => {
+    const banks = get(banksAtom);
+    
+    try {
+      const { error } = await supabase
+        .from('banks')
+        .delete()
+        .eq('id', bankId);
+      
+      if (error) {
+        console.error('Error deleting bank:', error);
+        throw error;
+      }
+      
+      set(banksAtom, banks.filter(b => b.id !== bankId));
+    } catch (error) {
+      console.error('Error deleting bank:', error);
       throw error;
     }
   }

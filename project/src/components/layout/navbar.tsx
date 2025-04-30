@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAtom } from 'jotai';
-import { LayoutDashboard, TrendingUp, ShoppingBag, ShoppingCart, BarChart3, LogOut, ArrowLeftRight, Users, Banknote, DollarSign } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, ShoppingBag, ShoppingCart, BarChart3, LogOut, ArrowLeftRight, Users, Banknote, DollarSign, Building } from 'lucide-react';
 import { authStateAtom, signOutAtom } from '../../store/supabaseAuth';
 import { Button } from '../ui/button';
 
@@ -97,6 +97,18 @@ const Navbar = () => {
           >
             <DollarSign className="h-5 w-5" />
             <span className="ml-3 hidden md:block">Expenses & Income</span>
+          </NavLink>
+          
+          <NavLink 
+            to="/banks" 
+            className={({ isActive }) => 
+              `flex items-center p-2 rounded-lg mb-1 transition-colors ${
+                isActive ? 'bg-blue-700' : 'hover:bg-gray-700'
+              }`
+            }
+          >
+            <Building className="h-5 w-5" />
+            <span className="ml-3 hidden md:block">Banks</span>
           </NavLink>
           
           <NavLink 

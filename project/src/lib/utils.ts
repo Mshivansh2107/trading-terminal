@@ -78,10 +78,25 @@ export function calculateStockBalance(
 ): number {
   const purchased = calculatePlatformTotal(purchases, platform, 'quantity');
   const sold = calculatePlatformTotal(sales, platform, 'quantity');
-  const transferredFrom = calculateTransferTotal(transfers, platform, 'from');
-  const transferredTo = calculateTransferTotal(transfers, platform, 'to');
   
-  return purchased - sold - transferredFrom + transferredTo;
+  // Filter transfers to skip 'ADJUSTMENT' platform transfers that shouldn't affect balance calculations
+  const filteredTransfers = transfers.filter(t => t.from !== 'ADJUSTMENT' && t.to !== 'ADJUSTMENT');
+  
+  // For real platform calculations, include adjustment transfers separately
+  const adjustmentTransfersIn = transfers.filter(t => t.from === 'ADJUSTMENT' && t.to === platform)
+    .reduce((sum, t) => sum + t.quantity, 0);
+    
+  const adjustmentTransfersOut = transfers.filter(t => t.from === platform && t.to === 'ADJUSTMENT')
+    .reduce((sum, t) => sum + t.quantity, 0);
+  
+  // Normal transfers between real platforms
+  const transferredFrom = filteredTransfers.filter(t => t.from === platform)
+    .reduce((sum, t) => sum + t.quantity, 0);
+    
+  const transferredTo = filteredTransfers.filter(t => t.to === platform)
+    .reduce((sum, t) => sum + t.quantity, 0);
+  
+  return purchased - sold - transferredFrom + transferredTo + adjustmentTransfersIn - adjustmentTransfersOut;
 }
 
 export function prepareExportData(sales: any[], purchases: any[], transfers: any[]) {

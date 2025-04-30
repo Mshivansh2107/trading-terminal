@@ -19,7 +19,7 @@ import {
   Cell,
   ComposedChart
 } from 'recharts';
-import { dashboardDataAtom, refreshDataAtom, statsDataAtom, settingsAtom, salesAtom, purchasesAtom, transfersAtom, updateStockBalanceAtom, updateCashBalanceAtom } from '../store/data';
+import { dashboardDataAtom, refreshDataAtom, statsDataAtom, settingsAtom, salesAtom, purchasesAtom, transfersAtom, updateStockBalanceAtom, updateCashBalanceAtom, banksAtom } from '../store/data';
 import DashboardCard from '../components/layout/dashboard-card';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { formatCurrency, formatQuantity, prepareExportData } from '../lib/utils';
@@ -39,7 +39,7 @@ import { authStateAtom } from '../store/supabaseAuth';
 import SettingsModal from '../components/settings-modal';
 import ErrorBoundary from '../components/error-boundary';
 import { CSVLink } from "react-csv";
-import { Transaction } from "../types";
+import { Transaction, BankEntity } from "../types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -387,6 +387,9 @@ const Dashboard = () => {
 
   // Add this line near the top of the Dashboard component where other state declarations are
   const [dateRange] = useAtom(dateRangeAtom);
+
+  // Add this to the component after the existing useAtom statements
+  const [banks] = useAtom(banksAtom);
 
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
@@ -1066,14 +1069,22 @@ const Dashboard = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   >
                     <option value="" disabled>Select platform</option>
-                    <option value="BINANCE AS">BINANCE AS</option>
-                    <option value="BYBIT AS">BYBIT AS</option>
-                    <option value="BITGET AS">BITGET AS</option>
-                    <option value="KUCOIN AS">KUCOIN AS</option>
-                    <option value="BINANCE SS">BINANCE SS</option>
-                    <option value="BYBIT SS">BYBIT SS</option>
-                    <option value="BITGET SS">BITGET SS</option>
-                    <option value="KUCOIN SS">KUCOIN SS</option>
+                    {/* Show existing platforms first */}
+                    {dashboardData.stockList.map((stock) => (
+                      <option key={stock.platform} value={stock.platform}>
+                        {stock.platform}
+                      </option>
+                    ))}
+                    {/* Then show other standard platforms */}
+                    {["BINANCE AS", "BYBIT AS", "BITGET AS", "KUCOIN AS", 
+                      "BINANCE SS", "BYBIT SS", "BITGET SS", "KUCOIN SS"]
+                      .filter(platform => !dashboardData.stockList.some(s => s.platform === platform))
+                      .map(platform => (
+                        <option key={platform} value={platform}>
+                          {platform}
+                        </option>
+                      ))
+                    }
                   </select>
                 )}
               </div>
@@ -1133,14 +1144,20 @@ const Dashboard = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   >
                     <option value="" disabled>Select bank</option>
-                    <option value="IDBI">IDBI</option>
-                    <option value="INDUSIND SS">INDUSIND SS</option>
-                    <option value="HDFC CAA SS">HDFC CAA SS</option>
-                    <option value="BOB SS">BOB SS</option>
-                    <option value="CANARA SS">CANARA SS</option>
-                    <option value="HDFC SS">HDFC SS</option>
-                    <option value="INDUSIND BLYNK">INDUSIND BLYNK</option>
-                    <option value="PNB">PNB</option>
+                    {/* Show existing cash banks first */}
+                    {dashboardData.cashList.map((cash) => (
+                      <option key={cash.bank} value={cash.bank}>
+                        {cash.bank}
+                      </option>
+                    ))}
+                    {/* Then show other available banks that aren't already in cashList */}
+                    {banks.map((bank) => 
+                      !dashboardData.cashList.some(cash => cash.bank === bank.name) && (
+                        <option key={bank.id} value={bank.name}>
+                          {bank.name}
+                        </option>
+                      )
+                    )}
                   </select>
                 )}
               </div>
@@ -1155,8 +1172,8 @@ const Dashboard = () => {
                 value={newCashBalance}
                 onChange={(e) => setNewCashBalance(e.target.value)}
                 className="col-span-3"
-        />
-      </div>
+              />
+            </div>
           </div>
           
           <DialogFooter>
