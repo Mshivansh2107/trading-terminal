@@ -10,6 +10,7 @@ import {
 import { Button } from './ui/button';
 import FormField from './layout/form-field';
 import { formatDateTime } from '../lib/utils';
+import { Bank, Platform } from '../types';
 
 interface Option {
   value: string;
@@ -98,6 +99,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   incomeCategories = []
 }) => {
   const [formData, setFormData] = useState<Record<string, any>>({});
+  const [isManualQuantity, setIsManualQuantity] = useState(true);
   
   // Initialize form data when modal opens or data changes
   useEffect(() => {
@@ -107,14 +109,29 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   }, [data, open]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
+    const { name, value } = e.target;
     
-    // Convert number inputs to numbers
-    if (type === 'number') {
-      setFormData(prev => ({ ...prev, [name]: parseFloat(value) }));
-    } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
+    let updatedFormData = { ...formData, [name]: value };
+    
+    // Auto-calculate quantity when totalPrice or price changes
+    if ((name === 'totalPrice' || name === 'price') && !isManualQuantity) {
+      const totalPrice = name === 'totalPrice' ? parseFloat(value) : parseFloat(updatedFormData.totalPrice);
+      const price = name === 'price' ? parseFloat(value) : parseFloat(updatedFormData.price);
+      
+      if (!isNaN(totalPrice) && !isNaN(price) && price > 0) {
+        const calculatedQuantity = totalPrice / price;
+        updatedFormData.quantity = calculatedQuantity.toFixed(8);
+      }
     }
+    
+    // Mark as manual quantity if user directly edits quantity
+    if (name === 'quantity') {
+      setIsManualQuantity(true);
+    } else if (name === 'totalPrice' || name === 'price') {
+      setIsManualQuantity(false);
+    }
+    
+    setFormData(updatedFormData);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -137,7 +154,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 type="select"
                 required
                 options={banks}
-                value={formData.bank || ''}
+                value={formData.bank as Bank}
                 onChange={handleChange}
               />
               
@@ -147,7 +164,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 type="select"
                 required
                 options={platforms}
-                value={formData.platform || ''}
+                value={formData.platform as Platform}
                 onChange={handleChange}
               />
 
@@ -155,7 +172,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 label="Asset Type"
                 name="assetType"
                 required
-                value={formData.assetType || ''}
+                value={formData.assetType}
                 onChange={handleChange}
               />
               
@@ -168,7 +185,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                   { value: 'USDT', label: 'USDT' },
                   { value: 'INR', label: 'INR' }
                 ]}
-                value={formData.fiatType || ''}
+                value={formData.fiatType}
                 onChange={handleChange}
               />
 
@@ -180,9 +197,8 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 inputProps={{ 
                   step: "0.01",
                   min: "0",
-                  placeholder: "Enter Total Price"
                 }}
-                value={formData.totalPrice || ''}
+                value={formData.totalPrice}
                 onChange={handleChange}
               />
               
@@ -194,9 +210,8 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 inputProps={{ 
                   step: "0.01",
                   min: "0",
-                  placeholder: "Enter Price"
                 }}
-                value={formData.price || ''}
+                value={formData.price}
                 onChange={handleChange}
               />
               
@@ -208,9 +223,8 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 inputProps={{ 
                   step: "0.00000001",
                   min: "0",
-                  placeholder: "Enter Quantity"
                 }}
-                value={formData.quantity || ''}
+                value={formData.quantity}
                 onChange={handleChange}
               />
               
@@ -218,7 +232,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 label="Name"
                 name="name"
                 required
-                value={formData.name || ''}
+                value={formData.name}
                 onChange={handleChange}
               />
               
@@ -267,7 +281,6 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 inputProps={{ 
                   step: "0.00000001",
                   min: "0",
-                  placeholder: "Enter Quantity"
                 }}
                 value={formData.quantity || ''}
                 onChange={handleChange}
@@ -328,7 +341,6 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 inputProps={{ 
                   step: "0.01",
                   min: "0",
-                  placeholder: "Enter Amount"
                 }}
                 value={formData.amount || ''}
                 onChange={handleChange}
@@ -391,7 +403,6 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 inputProps={{ 
                   step: "0.01",
                   min: "0",
-                  placeholder: "Enter Amount"
                 }}
                 value={formData.amount || ''}
                 onChange={handleChange}
