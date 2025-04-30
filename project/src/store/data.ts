@@ -21,6 +21,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { authStateAtom } from './supabaseAuth';
 import { getUsdtPrice } from '../lib/usdtPrice';
+import { filterByDateAtom, isDateInRangeAtom, dateRangeAtom } from './filters';
 
 // Initial data store
 export const salesAtom = atomWithStorage<SalesEntry[]>('salesData', []);
@@ -151,94 +152,116 @@ export const liveUsdtPriceAtom = atom(
 
 // Computed data for dashboard
 export const dashboardDataAtom = atom<DashboardData>((get) => {
+  // Get all data
   const sales = get(salesAtom);
   const purchases = get(purchasesAtom);
   const transfers = get(transfersAtom);
   const expenses = get(expensesAtom);
   const settings = get(settingsAtom);
   
-  const netSales = calculateNetSales(sales);
-  const netPurchases = calculateNetPurchases(purchases);
-  const netExpenses = expenses
+  // Get filter functions and date range
+  const filterByDate = get(filterByDateAtom);
+  const isDateInRange = get(isDateInRangeAtom);
+  const { isActive: isFilterActive } = get(dateRangeAtom);
+  
+  // Apply date filtering if active
+  const filteredSales = filterByDate(sales);
+  const filteredPurchases = filterByDate(purchases);
+  const filteredTransfers = filterByDate(transfers);
+  const filteredExpenses = filterByDate(expenses);
+  
+  // Calculate metrics using filtered data
+  const netSales = calculateNetSales(filteredSales);
+  const netPurchases = calculateNetPurchases(filteredPurchases);
+  const netExpenses = filteredExpenses
     .filter(e => e.type === 'expense')
     .reduce((total, e) => total + e.amount, 0);
-  const netIncomes = expenses
+  const netIncomes = filteredExpenses
     .filter(e => e.type === 'income')
     .reduce((total, e) => total + e.amount, 0);
   const currentMargin = calculateMargin(netSales, netPurchases);
   
-  // Calculate stock balances
+  // For stock calculations, we need to handle differently, as stock is cumulative:
+  // - If filtering is active, calculate stock at the end of the filter period 
+  // - If no filtering, show current stock
+  const calculateAdjustedStockBalance = (platform: Platform) => {
+    if (!isFilterActive) {
+      // No filtering, use standard calculation
+      return calculateStockBalance(purchases, sales, transfers, platform);
+    } else {
+      // Filter is active, calculate stock at end of period by:
+      // 1. Including all purchases/sales/transfers up to the end date
+      // Consider all transactions up to the filter end date
+      const { endDate } = get(dateRangeAtom);
+      const endDateTime = new Date(endDate).setHours(23, 59, 59, 999);
+      
+      const relevantPurchases = purchases.filter(p => new Date(p.createdAt).getTime() <= endDateTime);
+      const relevantSales = sales.filter(s => new Date(s.createdAt).getTime() <= endDateTime);
+      const relevantTransfers = transfers.filter(t => new Date(t.createdAt).getTime() <= endDateTime);
+      
+      return calculateStockBalance(relevantPurchases, relevantSales, relevantTransfers, platform);
+    }
+  };
+  
+  // Calculate stock balances using the adjusted method
   const stockList = [
-    { platform: 'BINANCE AS' as const, quantity: calculateStockBalance(purchases, sales, transfers, 'BINANCE AS') },
-    { platform: 'BYBIT AS' as const, quantity: calculateStockBalance(purchases, sales, transfers, 'BYBIT AS') },
-    { platform: 'BITGET AS' as const, quantity: calculateStockBalance(purchases, sales, transfers, 'BITGET AS') },
-    { platform: 'KUCOIN AS' as const, quantity: calculateStockBalance(purchases, sales, transfers, 'KUCOIN AS') },
-    { platform: 'BINANCE SS' as const, quantity: calculateStockBalance(purchases, sales, transfers, 'BINANCE SS') },
-    { platform: 'BYBIT SS' as const, quantity: calculateStockBalance(purchases, sales, transfers, 'BYBIT SS') },
-    { platform: 'BITGET SS' as const, quantity: calculateStockBalance(purchases, sales, transfers, 'BITGET SS') },
-    { platform: 'KUCOIN SS' as const, quantity: calculateStockBalance(purchases, sales, transfers, 'KUCOIN SS') },
+    { platform: 'BINANCE AS' as const, quantity: calculateAdjustedStockBalance('BINANCE AS') },
+    { platform: 'BYBIT AS' as const, quantity: calculateAdjustedStockBalance('BYBIT AS') },
+    { platform: 'BITGET AS' as const, quantity: calculateAdjustedStockBalance('BITGET AS') },
+    { platform: 'KUCOIN AS' as const, quantity: calculateAdjustedStockBalance('KUCOIN AS') },
+    { platform: 'BINANCE SS' as const, quantity: calculateAdjustedStockBalance('BINANCE SS') },
+    { platform: 'BYBIT SS' as const, quantity: calculateAdjustedStockBalance('BYBIT SS') },
+    { platform: 'BITGET SS' as const, quantity: calculateAdjustedStockBalance('BITGET SS') },
+    { platform: 'KUCOIN SS' as const, quantity: calculateAdjustedStockBalance('KUCOIN SS') },
   ];
   
-  // Calculate cash balances including expenses and incomes
-  const bankBalances = [
-    { bank: 'IDBI' as const, amount: 
-      sales.filter(s => s.bank === 'IDBI').reduce((sum, s) => sum + s.totalPrice, 0) -
-      purchases.filter(p => p.bank === 'IDBI').reduce((sum, p) => sum + p.totalPrice, 0) +
-      expenses.filter(e => e.bank === 'IDBI' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
-      expenses.filter(e => e.bank === 'IDBI' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
-    },
-    { bank: 'INDUSIND SS' as const, amount: 
-      sales.filter(s => s.bank === 'INDUSIND SS').reduce((sum, s) => sum + s.totalPrice, 0) -
-      purchases.filter(p => p.bank === 'INDUSIND SS').reduce((sum, p) => sum + p.totalPrice, 0) +
-      expenses.filter(e => e.bank === 'INDUSIND SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
-      expenses.filter(e => e.bank === 'INDUSIND SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
-    },
-    { bank: 'HDFC CAA SS' as const, amount: 
-      sales.filter(s => s.bank === 'HDFC CAA SS').reduce((sum, s) => sum + s.totalPrice, 0) -
-      purchases.filter(p => p.bank === 'HDFC CAA SS').reduce((sum, p) => sum + p.totalPrice, 0) +
-      expenses.filter(e => e.bank === 'HDFC CAA SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
-      expenses.filter(e => e.bank === 'HDFC CAA SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
-    },
-    { bank: 'BOB SS' as const, amount: 
-      sales.filter(s => s.bank === 'BOB SS').reduce((sum, s) => sum + s.totalPrice, 0) -
-      purchases.filter(p => p.bank === 'BOB SS').reduce((sum, p) => sum + p.totalPrice, 0) +
-      expenses.filter(e => e.bank === 'BOB SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
-      expenses.filter(e => e.bank === 'BOB SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
-    },
-    { bank: 'CANARA SS' as const, amount: 
-      sales.filter(s => s.bank === 'CANARA SS').reduce((sum, s) => sum + s.totalPrice, 0) -
-      purchases.filter(p => p.bank === 'CANARA SS').reduce((sum, p) => sum + p.totalPrice, 0) +
-      expenses.filter(e => e.bank === 'CANARA SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
-      expenses.filter(e => e.bank === 'CANARA SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
-    },
-    { bank: 'HDFC SS' as const, amount: 
-      sales.filter(s => s.bank === 'HDFC SS').reduce((sum, s) => sum + s.totalPrice, 0) -
-      purchases.filter(p => p.bank === 'HDFC SS').reduce((sum, p) => sum + p.totalPrice, 0) +
-      expenses.filter(e => e.bank === 'HDFC SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
-      expenses.filter(e => e.bank === 'HDFC SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
-    },
-    { bank: 'INDUSIND BLYNK' as const, amount: 
-      sales.filter(s => s.bank === 'INDUSIND BLYNK').reduce((sum, s) => sum + s.totalPrice, 0) -
-      purchases.filter(p => p.bank === 'INDUSIND BLYNK').reduce((sum, p) => sum + p.totalPrice, 0) +
-      expenses.filter(e => e.bank === 'INDUSIND BLYNK' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
-      expenses.filter(e => e.bank === 'INDUSIND BLYNK' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
-    },
-    { bank: 'PNB' as const, amount: 
-      sales.filter(s => s.bank === 'PNB').reduce((sum, s) => sum + s.totalPrice, 0) -
-      purchases.filter(p => p.bank === 'PNB').reduce((sum, p) => sum + p.totalPrice, 0) +
-      expenses.filter(e => e.bank === 'PNB' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
-      expenses.filter(e => e.bank === 'PNB' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
-    },
+  // Similarly calculate cash balances up to the filter end date
+  const calculateAdjustedBankBalance = (bank: Bank) => {
+    if (!isFilterActive) {
+      return (
+        sales.filter(s => s.bank === bank).reduce((sum, s) => sum + s.totalPrice, 0) -
+        purchases.filter(p => p.bank === bank).reduce((sum, p) => sum + p.totalPrice, 0) +
+        expenses.filter(e => e.bank === bank && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
+        expenses.filter(e => e.bank === bank && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
+      );
+    } else {
+      const { endDate } = get(dateRangeAtom);
+      const endDateTime = new Date(endDate).setHours(23, 59, 59, 999);
+      
+      // Include all transactions up to end date
+      return (
+        sales.filter(s => s.bank === bank && new Date(s.createdAt).getTime() <= endDateTime)
+          .reduce((sum, s) => sum + s.totalPrice, 0) -
+        purchases.filter(p => p.bank === bank && new Date(p.createdAt).getTime() <= endDateTime)
+          .reduce((sum, p) => sum + p.totalPrice, 0) +
+        expenses.filter(e => e.bank === bank && e.type === 'income' && new Date(e.createdAt).getTime() <= endDateTime)
+          .reduce((sum, e) => sum + e.amount, 0) -
+        expenses.filter(e => e.bank === bank && e.type === 'expense' && new Date(e.createdAt).getTime() <= endDateTime)
+          .reduce((sum, e) => sum + e.amount, 0)
+      );
+    }
+  };
+  
+  // Calculate cash balances using the adjusted method
+  const cashList = [
+    { bank: 'IDBI' as const, amount: calculateAdjustedBankBalance('IDBI') },
+    { bank: 'INDUSIND SS' as const, amount: calculateAdjustedBankBalance('INDUSIND SS') },
+    { bank: 'HDFC CAA SS' as const, amount: calculateAdjustedBankBalance('HDFC CAA SS') },
+    { bank: 'BOB SS' as const, amount: calculateAdjustedBankBalance('BOB SS') },
+    { bank: 'CANARA SS' as const, amount: calculateAdjustedBankBalance('CANARA SS') },
+    { bank: 'HDFC SS' as const, amount: calculateAdjustedBankBalance('HDFC SS') },
+    { bank: 'INDUSIND BLYNK' as const, amount: calculateAdjustedBankBalance('INDUSIND BLYNK') },
+    { bank: 'PNB' as const, amount: calculateAdjustedBankBalance('PNB') },
   ];
   
-  const totalCash = bankBalances.reduce((total, cash) => total + cash.amount, 0);
+  const totalCash = cashList.reduce((total, cash) => total + cash.amount, 0);
   const netCash = netSales - netPurchases + netIncomes - netExpenses;
   
-  // Calculate average prices from transactions
-  const salesTransactions = sales.length > 0 ? sales : [];
-  const purchaseTransactions = purchases.length > 0 ? purchases : [];
+  // Calculate average prices from filtered transactions
+  const salesTransactions = filteredSales.length > 0 ? filteredSales : [];
+  const purchaseTransactions = filteredPurchases.length > 0 ? filteredPurchases : [];
   
-  // Calculate average sales price, respecting manual override
+  // Calculate average sales price
   const totalSalesQuantity = salesTransactions.reduce((sum, s) => sum + s.quantity, 0);
   const totalSalesValue = salesTransactions.reduce((sum, s) => sum + s.totalPrice, 0);
   const calculatedSalesPrice = totalSalesQuantity > 0 
@@ -274,9 +297,11 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   const posStartDate = new Date('2023-01-01'); // Replace with actual start date
   const salesAfterPosStart = sales
     .filter(s => new Date(s.createdAt) >= posStartDate)
+    .filter(s => isDateInRange(s.createdAt))
     .reduce((sum, s) => sum + s.totalPrice, 0);
   const purchasesAfterPosStart = purchases
     .filter(p => new Date(p.createdAt) >= posStartDate)
+    .filter(p => isDateInRange(p.createdAt))
     .reduce((sum, p) => sum + p.totalPrice, 0);
   const netCashAfterSales = netCash - (salesAfterPosStart - purchasesAfterPosStart);
   
@@ -287,7 +312,7 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
     buyPriceRange,
     buyPriceRangeAlt,
     stockList,
-    cashList: bankBalances,
+    cashList,
     netSales,
     netPurchases,
     netExpenses,
@@ -296,7 +321,7 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
     requiredMargin,
     netCash,
     netCashAfterSales,
-    salesByBank: bankBalances.map(cash => ({
+    salesByBank: cashList.map(cash => ({
       bank: cash.bank,
       total: cash.amount
     })),
@@ -309,8 +334,16 @@ export const statsDataAtom = atom<StatsData>((get) => {
   const purchases = get(purchasesAtom);
   const expenses = get(expensesAtom);
   
+  // Get filter functions
+  const filterByDate = get(filterByDateAtom);
+  
+  // Apply date filtering
+  const filteredSales = filterByDate(sales);
+  const filteredPurchases = filterByDate(purchases);
+  const filteredExpenses = filterByDate(expenses);
+  
   // Group sales by day
-  const salesByDay = sales.reduce((acc: {date: string, isoDate: string, amount: number}[], sale) => {
+  const salesByDay = filteredSales.reduce((acc: {date: string, isoDate: string, amount: number}[], sale) => {
     const date = new Date(sale.createdAt);
     const dateString = date.toLocaleDateString();
     const isoDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
@@ -326,7 +359,7 @@ export const statsDataAtom = atom<StatsData>((get) => {
   }, []);
   
   // Group purchases by day
-  const purchasesByDay = purchases.reduce((acc: {date: string, isoDate: string, amount: number}[], purchase) => {
+  const purchasesByDay = filteredPurchases.reduce((acc: {date: string, isoDate: string, amount: number}[], purchase) => {
     const date = new Date(purchase.createdAt);
     const dateString = date.toLocaleDateString();
     const isoDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
@@ -342,7 +375,7 @@ export const statsDataAtom = atom<StatsData>((get) => {
   }, []);
   
   // Group expenses by day
-  const expensesByDay = expenses
+  const expensesByDay = filteredExpenses
     .filter(e => e.type === 'expense')
     .reduce((acc: {date: string, isoDate: string, amount: number}[], expense) => {
       const date = new Date(expense.createdAt);
@@ -360,7 +393,7 @@ export const statsDataAtom = atom<StatsData>((get) => {
     }, []);
   
   // Group incomes by day
-  const incomesByDay = expenses
+  const incomesByDay = filteredExpenses
     .filter(e => e.type === 'income')
     .reduce((acc: {date: string, isoDate: string, amount: number}[], income) => {
       const date = new Date(income.createdAt);
@@ -372,65 +405,65 @@ export const statsDataAtom = atom<StatsData>((get) => {
         existingDate.amount += income.amount;
       } else {
         acc.push({ date: dateString, isoDate, amount: income.amount });
-    }
-    
-    return acc;
-  }, []);
+      }
+      
+      return acc;
+    }, []);
   
   // Calculate sales by bank
   const salesByBank = [
-    { bank: 'IDBI' as const, amount: calculateBankTotal(sales, 'IDBI') },
-    { bank: 'CANARA SS' as const, amount: calculateBankTotal(sales, 'CANARA SS') },
-    { bank: 'BOB SS' as const, amount: calculateBankTotal(sales, 'BOB SS') },
-    { bank: 'PNB' as const, amount: calculateBankTotal(sales, 'PNB') },
-    { bank: 'INDUSIND BLYNK' as const, amount: calculateBankTotal(sales, 'INDUSIND BLYNK') },
-    { bank: 'HDFC SS' as const, amount: calculateBankTotal(sales, 'HDFC SS') },
+    { bank: 'IDBI' as const, amount: calculateBankTotal(filteredSales, 'IDBI') },
+    { bank: 'CANARA SS' as const, amount: calculateBankTotal(filteredSales, 'CANARA SS') },
+    { bank: 'BOB SS' as const, amount: calculateBankTotal(filteredSales, 'BOB SS') },
+    { bank: 'PNB' as const, amount: calculateBankTotal(filteredSales, 'PNB') },
+    { bank: 'INDUSIND BLYNK' as const, amount: calculateBankTotal(filteredSales, 'INDUSIND BLYNK') },
+    { bank: 'HDFC SS' as const, amount: calculateBankTotal(filteredSales, 'HDFC SS') },
   ];
   
   // Calculate sales by platform
   const salesByPlatform = [
-    { platform: 'BINANCE SS' as const, amount: calculateBankTotal(sales, 'BINANCE SS') },
-    { platform: 'BINANCE AS' as const, amount: calculateBankTotal(sales, 'BINANCE AS') },
-    { platform: 'BYBIT AS' as const, amount: calculateBankTotal(sales, 'BYBIT AS') },
-    { platform: 'BITGET SS' as const, amount: calculateBankTotal(sales, 'BITGET SS') },
+    { platform: 'BINANCE SS' as const, amount: calculatePlatformTotal(filteredSales, 'BINANCE SS') },
+    { platform: 'BINANCE AS' as const, amount: calculatePlatformTotal(filteredSales, 'BINANCE AS') },
+    { platform: 'BYBIT AS' as const, amount: calculatePlatformTotal(filteredSales, 'BYBIT AS') },
+    { platform: 'BITGET SS' as const, amount: calculatePlatformTotal(filteredSales, 'BITGET SS') },
   ];
   
   // Calculate purchases by bank
   const purchasesByBank = [
-    { bank: 'IDBI' as const, amount: calculateBankTotal(purchases, 'IDBI') },
-    { bank: 'CANARA SS' as const, amount: calculateBankTotal(purchases, 'CANARA SS') },
-    { bank: 'BOB SS' as const, amount: calculateBankTotal(purchases, 'BOB SS') },
-    { bank: 'PNB' as const, amount: calculateBankTotal(purchases, 'PNB') },
-    { bank: 'INDUSIND BLYNK' as const, amount: calculateBankTotal(purchases, 'INDUSIND BLYNK') },
-    { bank: 'HDFC SS' as const, amount: calculateBankTotal(purchases, 'HDFC SS') },
+    { bank: 'IDBI' as const, amount: calculateBankTotal(filteredPurchases, 'IDBI') },
+    { bank: 'CANARA SS' as const, amount: calculateBankTotal(filteredPurchases, 'CANARA SS') },
+    { bank: 'BOB SS' as const, amount: calculateBankTotal(filteredPurchases, 'BOB SS') },
+    { bank: 'PNB' as const, amount: calculateBankTotal(filteredPurchases, 'PNB') },
+    { bank: 'INDUSIND BLYNK' as const, amount: calculateBankTotal(filteredPurchases, 'INDUSIND BLYNK') },
+    { bank: 'HDFC SS' as const, amount: calculateBankTotal(filteredPurchases, 'HDFC SS') },
   ];
   
   // Calculate purchases by platform
   const purchasesByPlatform = [
-    { platform: 'BINANCE SS' as const, amount: calculateBankTotal(purchases, 'BINANCE SS') },
-    { platform: 'BINANCE AS' as const, amount: calculateBankTotal(purchases, 'BINANCE AS') },
-    { platform: 'BYBIT AS' as const, amount: calculateBankTotal(purchases, 'BYBIT AS') },
-    { platform: 'BITGET SS' as const, amount: calculateBankTotal(purchases, 'BITGET SS') },
+    { platform: 'BINANCE SS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BINANCE SS') },
+    { platform: 'BINANCE AS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BINANCE AS') },
+    { platform: 'BYBIT AS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BYBIT AS') },
+    { platform: 'BITGET SS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BITGET SS') },
   ];
   
   // Calculate expenses by bank
   const expensesByBank = [
-    { bank: 'IDBI' as const, amount: expenses.filter(e => e.bank === 'IDBI' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'CANARA SS' as const, amount: expenses.filter(e => e.bank === 'CANARA SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'BOB SS' as const, amount: expenses.filter(e => e.bank === 'BOB SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'PNB' as const, amount: expenses.filter(e => e.bank === 'PNB' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'INDUSIND BLYNK' as const, amount: expenses.filter(e => e.bank === 'INDUSIND BLYNK' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'HDFC SS' as const, amount: expenses.filter(e => e.bank === 'HDFC SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'IDBI' as const, amount: filteredExpenses.filter(e => e.bank === 'IDBI' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'CANARA SS' as const, amount: filteredExpenses.filter(e => e.bank === 'CANARA SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'BOB SS' as const, amount: filteredExpenses.filter(e => e.bank === 'BOB SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'PNB' as const, amount: filteredExpenses.filter(e => e.bank === 'PNB' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'INDUSIND BLYNK' as const, amount: filteredExpenses.filter(e => e.bank === 'INDUSIND BLYNK' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'HDFC SS' as const, amount: filteredExpenses.filter(e => e.bank === 'HDFC SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
   ];
   
   // Calculate incomes by bank
   const incomesByBank = [
-    { bank: 'IDBI' as const, amount: expenses.filter(e => e.bank === 'IDBI' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'CANARA SS' as const, amount: expenses.filter(e => e.bank === 'CANARA SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'BOB SS' as const, amount: expenses.filter(e => e.bank === 'BOB SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'PNB' as const, amount: expenses.filter(e => e.bank === 'PNB' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'INDUSIND BLYNK' as const, amount: expenses.filter(e => e.bank === 'INDUSIND BLYNK' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'HDFC SS' as const, amount: expenses.filter(e => e.bank === 'HDFC SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'IDBI' as const, amount: filteredExpenses.filter(e => e.bank === 'IDBI' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'CANARA SS' as const, amount: filteredExpenses.filter(e => e.bank === 'CANARA SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'BOB SS' as const, amount: filteredExpenses.filter(e => e.bank === 'BOB SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'PNB' as const, amount: filteredExpenses.filter(e => e.bank === 'PNB' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'INDUSIND BLYNK' as const, amount: filteredExpenses.filter(e => e.bank === 'INDUSIND BLYNK' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
+    { bank: 'HDFC SS' as const, amount: filteredExpenses.filter(e => e.bank === 'HDFC SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
   ];
   
   // Cash distribution (from dashboard)
@@ -451,6 +484,11 @@ export const statsDataAtom = atom<StatsData>((get) => {
     cashDistribution,
   };
 });
+
+// Helper function to calculate total by platform
+function calculatePlatformTotal(items: Array<{platform: string, totalPrice: number}>, platform: string): number {
+  return items.filter(item => item.platform === platform).reduce((sum, item) => sum + item.totalPrice, 0);
+}
 
 // Actions
 export const addSaleAtom = atom(
