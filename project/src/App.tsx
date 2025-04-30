@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAtom } from 'jotai';
 import { authStateAtom, initSupabaseSessionAtom } from './store/supabaseAuth';
-import { refreshDataAtom, syncSettingsAtom, autoFetchUsdPriceAtom } from './store/data';
+import { refreshDataAtom, syncSettingsAtom, autoFetchUsdPriceAtom, fetchBanksAtom } from './store/data';
 import { ToastProvider } from './components/ui/toast';
 
 // Pages
@@ -12,6 +12,7 @@ import Purchase from './pages/purchase';
 import Transfer from './pages/transfer';
 import BankTransfer from './pages/bank-transfer';
 import Expenses from './pages/expenses';
+import Banks from './pages/banks';
 import Stats from './pages/stats';
 import Login from './pages/login';
 import Register from './pages/register';
@@ -56,6 +57,7 @@ function App() {
   const [, refreshData] = useAtom(refreshDataAtom);
   const [, syncSettings] = useAtom(syncSettingsAtom);
   const [, autoFetchPrice] = useAtom(autoFetchUsdPriceAtom);
+  const [, fetchBanks] = useAtom(fetchBanksAtom);
   
   useEffect(() => {
     // Initialize auth state from Supabase on app load
@@ -68,7 +70,8 @@ function App() {
       Promise.all([
         refreshData(),
         syncSettings(),
-        autoFetchPrice()
+        autoFetchPrice(),
+        fetchBanks()
       ]).catch(err => console.error('Error initializing data:', err));
       
       // Set up auto-fetch interval for USD price
@@ -78,7 +81,7 @@ function App() {
       
       return () => clearInterval(interval);
     }
-  }, [authState.isAuthenticated, refreshData, syncSettings, autoFetchPrice]);
+  }, [authState.isAuthenticated, refreshData, syncSettings, autoFetchPrice, fetchBanks]);
   
   return (
     <Router>
@@ -125,6 +128,12 @@ function App() {
               <Route path="/expenses" element={
                 <ProtectedRoute>
                   <Expenses />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/banks" element={
+              <ProtectedRoute>
+                <Banks />
               </ProtectedRoute>
             } />
             

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useAtom } from 'jotai';
-import { bankTransfersAtom, addBankTransferAtom, updateBankTransferAtom, deleteBankTransferAtom } from '../store/data';
+import { bankTransfersAtom, addBankTransferAtom, updateBankTransferAtom, deleteBankTransferAtom, banksAtom } from '../store/data';
 import { formatQuantity, formatDateTime, formatCurrency } from '../lib/utils';
 import DataTable from '../components/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import FormField from '../components/layout/form-field';
 import { PlusCircle, PencilIcon, TrashIcon } from 'lucide-react';
 import EditTransactionModal from '../components/edit-transaction-modal';
-import { BankTransferEntry, Bank } from '../types';
+import { BankTransferEntry } from '../types';
 
 const BankTransfer = () => {
   const [bankTransfers] = useAtom(bankTransfersAtom);
@@ -18,6 +18,7 @@ const BankTransfer = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingBankTransfer, setEditingBankTransfer] = useState<BankTransferEntry | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [banks] = useAtom(banksAtom);
   
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -105,16 +106,30 @@ const BankTransfer = () => {
     }
   ], [handleEdit, handleDelete]);
   
-  const banks = [
-    { value: 'IDBI', label: 'IDBI' },
-    { value: 'INDUSIND SS', label: 'INDUSIND SS' },
-    { value: 'HDFC CAA SS', label: 'HDFC CAA SS' },
-    { value: 'BOB SS', label: 'BOB SS' },
-    { value: 'CANARA SS', label: 'CANARA SS' },
-    { value: 'HDFC SS', label: 'HDFC SS' },
-    { value: 'INDUSIND BLYNK', label: 'INDUSIND BLYNK' },
-    { value: 'PNB', label: 'PNB' },
-  ];
+  // Convert dynamic banks to options format
+  const bankOptions = useMemo(() => {
+    // Use banks from the store if available
+    if (banks && banks.length > 0) {
+      return banks
+        .filter(bank => bank.isActive)
+        .map(bank => ({
+          value: bank.name,
+          label: bank.name
+        }));
+    }
+    
+    // Fallback to hardcoded banks if no data is available
+    return [
+      { value: 'IDBI', label: 'IDBI' },
+      { value: 'INDUSIND SS', label: 'INDUSIND SS' },
+      { value: 'HDFC CAA SS', label: 'HDFC CAA SS' },
+      { value: 'BOB SS', label: 'BOB SS' },
+      { value: 'CANARA SS', label: 'CANARA SS' },
+      { value: 'HDFC SS', label: 'HDFC SS' },
+      { value: 'INDUSIND BLYNK', label: 'INDUSIND BLYNK' },
+      { value: 'PNB', label: 'PNB' },
+    ];
+  }, [banks]);
   
   const accounts = [
     { value: 'Main', label: 'Main Account' },
@@ -128,7 +143,7 @@ const BankTransfer = () => {
     const totals = new Map();
     
     // Initialize all banks with zeros
-    banks.forEach(bank => {
+    bankOptions.forEach(bank => {
       totals.set(bank.value, { bank: bank.value, sent: 0, received: 0, net: 0 });
     });
     
@@ -155,7 +170,7 @@ const BankTransfer = () => {
     return Array.from(totals.values())
       .filter(item => item.sent > 0 || item.received > 0)
       .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
-  }, [bankTransfers, banks]);
+  }, [bankTransfers, bankOptions]);
 
   return (
     <div className="p-4 md:p-6">
@@ -183,7 +198,7 @@ const BankTransfer = () => {
                   name="fromBank"
                   type="select"
                   required
-                  options={banks}
+                  options={bankOptions}
                 />
                 
                 <FormField
@@ -199,7 +214,7 @@ const BankTransfer = () => {
                   name="toBank"
                   type="select"
                   required
-                  options={banks}
+                  options={bankOptions}
                 />
                 
                 <FormField
@@ -304,7 +319,7 @@ const BankTransfer = () => {
           onSave={handleSaveEdit}
           data={editingBankTransfer}
           type="bankTransfer"
-          banks={banks}
+          banks={bankOptions}
           accounts={accounts}
         />
       )}

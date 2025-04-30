@@ -4,7 +4,7 @@ export type User = {
   pin: string;
 }
 
-export type Platform = 'BINANCE SS' | 'BINANCE AS' | 'BYBIT SS' | 'BYBIT AS' | 'BITGET SS' | 'BITGET AS' | 'KUCOIN SS' | 'KUCOIN AS';
+export type Platform = 'BINANCE SS' | 'BINANCE AS' | 'BYBIT SS' | 'BYBIT AS' | 'BITGET SS' | 'BITGET AS' | 'KUCOIN SS' | 'KUCOIN AS' | 'ADJUSTMENT';
 
 export type Bank = 'IDBI' | 'INDUSIND SS' | 'HDFC CAA SS' | 'BOB SS' | 'CANARA SS' | 'HDFC SS' | 'INDUSIND BLYNK' | 'PNB';
 
@@ -165,3 +165,13 @@ export interface Transaction {
   isIncome?: boolean;
   bank: string;
 }
+
+// Bank database entity type
+export type BankEntity = {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
