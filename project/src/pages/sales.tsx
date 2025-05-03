@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAtom } from 'jotai';
 import { salesAtom, addSaleAtom, updateSaleAtom, deleteSaleAtom, banksAtom, refreshDataAtom } from '../store/data';
-import { formatCurrency, formatQuantity, formatDateTime, generateOrderNumber } from '../lib/utils';
+import { formatCurrency, formatQuantity, formatDateTime } from '../lib/utils';
 import DataTable from '../components/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -97,7 +97,7 @@ const Sales = () => {
     
     const formData = new FormData(e.currentTarget);
     const newSale = {
-      orderNumber: generateOrderNumber(),
+      orderNumber: formData.get('orderNumber') as string,
       bank: formData.get('bank') as Bank,
       orderType: 'Sell' as const,
       assetType: formData.get('assetType') as string,
@@ -274,6 +274,15 @@ const Sales = () => {
             <CardContent>
               <form onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <FormField
+                    label="Order Number"
+                    name="orderNumber"
+                    required
+                    inputProps={{ 
+                      placeholder: "Enter Order Number"
+                    }}
+                  />
+                  
                   <FormField
                     label="Bank"
                     name="bank"

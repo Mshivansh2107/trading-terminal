@@ -149,6 +149,14 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <CustomFormField
+                label="Order Number"
+                name="orderNumber"
+                required
+                value={formData.orderNumber}
+                onChange={handleChange}
+              />
+              
+              <CustomFormField
                 label="Bank"
                 name="bank"
                 type="select"
