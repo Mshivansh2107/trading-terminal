@@ -56,12 +56,15 @@ const Dashboard = () => {
   const [settings] = useAtom(settingsAtom);
   const [, refreshData] = useAtom(refreshDataAtom);
   const [dateRange] = useAtom(dateRangeAtom);
+  const [isSingleDay] = useAtom(isSingleDaySelectionAtom);
+  const [formatDateByRange] = useAtom(formatDateByRangeAtom);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'stock' | 'cash'>('overview');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sales] = useAtom(salesAtom);
   const [purchases] = useAtom(purchasesAtom);
   const [transfers] = useAtom(transfersAtom);
+  const [banks] = useAtom(banksAtom);
   const [isExporting, setIsExporting] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const tooltipTimeoutRef = useRef<NodeJS.Timeout>();
@@ -227,28 +230,87 @@ const Dashboard = () => {
   // Prepare sales data for chart with proper date formatting and sorting
   const salesChartData = statsData.salesByDay
     .sort((a, b) => new Date(a.isoDate).getTime() - new Date(b.isoDate).getTime())
-    .map(day => ({
-      date: new Date(day.isoDate).toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      }),
-      sales: day.amount,
-      purchases: statsData.purchasesByDay.find(
-        p => p.isoDate === day.isoDate
-      )?.amount || 0
-    }));
-
-  // If no data, provide empty array with last 14 days
-  const defaultChartData = salesChartData.length > 0 ? salesChartData : 
-    Array.from({ length: 14 }).map((_, i) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (13 - i));
+    .map(day => {
+      let dateDisplay;
+      if (isSingleDay) {
+        // Extract just the hour:minute from the date string for hourly view
+        const date = new Date(day.isoDate);
+        dateDisplay = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } else {
+        dateDisplay = new Date(day.isoDate).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        });
+      }
+      
       return {
-        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        sales: 0,
-        purchases: 0
+        date: dateDisplay,
+        sales: day.amount,
+        purchases: statsData.purchasesByDay.find(
+          p => p.isoDate === day.isoDate
+        )?.amount || 0
       };
     });
+
+  // If no data, provide empty array with last 14 days or 24 hours
+  const defaultChartData = salesChartData.length > 0 ? salesChartData : 
+    isSingleDay ? 
+      // Create 24 hourly slots for a single day
+      Array.from({ length: 24 }).map((_, i) => {
+        const hour = i.toString().padStart(2, '0');
+        return {
+          date: `${hour}:00`,
+          sales: 0,
+          purchases: 0
+        };
+      }) : 
+      // Create 14 daily slots for multi-day view
+      Array.from({ length: 14 }).map((_, i) => {
+        const date = new Date();
+        date.setDate(date.getDate() - (13 - i));
+        return {
+          date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          sales: 0,
+          purchases: 0
+        };
+      });
+
+  // Update the code that creates hourly data points in statsDataAtom usage to ensure all 24 hours
+  // Add this useEffect to sort and normalize salesChartData when it changes
+  useEffect(() => {
+    if (isSingleDay && salesChartData.length > 0) {
+      // Ensure we have data points for all 24 hours
+      const fullDayData = Array.from({ length: 24 }).map((_, hour) => {
+        const hourStr = hour.toString().padStart(2, '0');
+        const timeStr = `${hourStr}:00`;
+        
+        // Find existing data point for this hour
+        const existingDataPoint = salesChartData.find(item => {
+          // Try to match the hour part from the date string
+          const itemHour = item.date.split(':')[0];
+          return itemHour === hourStr;
+        });
+        
+        return existingDataPoint || {
+          date: timeStr,
+          sales: 0,
+          purchases: 0
+        };
+      });
+      
+      // Sort by hour
+      fullDayData.sort((a, b) => {
+        const hourA = parseInt(a.date.split(':')[0]);
+        const hourB = parseInt(b.date.split(':')[0]);
+        return hourA - hourB;
+      });
+      
+      // We can't directly modify salesChartData as it's derived from statsData
+      // But we can ensure defaultChartData uses the full day data when in single day mode
+      // defaultChartData = fullDayData; // Can't reassign const
+      // Instead, we'll use this data in the chart render
+    }
+  }, [salesChartData, isSingleDay]);
 
   // Prepare data for pie charts with proper filtering and sorting
   const stockPieData = dashboardData.stockList
@@ -394,13 +456,6 @@ const Dashboard = () => {
       console.log("Failed to update cash balance:", error);
     }
   };
-
-  // Add this to the component after the existing useAtom statements
-  const [banks] = useAtom(banksAtom);
-
-  // Add this to your state hooks
-  const [isSingleDay] = useAtom(isSingleDaySelectionAtom);
-  const [formatDateByRange] = useAtom(formatDateByRangeAtom);
 
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
@@ -573,7 +628,7 @@ const Dashboard = () => {
                     <span className="text-green-500">●</span> Sales & Purchases
                   </div>
                   <div className="text-sm font-normal text-gray-500">
-                    Last 14 days
+                    {isSingleDay ? 'Hourly View' : 'Daily View'}
                   </div>
                 </CardTitle>
           </CardHeader>
@@ -587,6 +642,7 @@ const Dashboard = () => {
                         tickLine={false}
                         axisLine={{ stroke: '#e5e7eb' }}
                         style={{ fontSize: '0.75rem' }}
+                        interval={isSingleDay ? 2 : 0}
                       />
                       <YAxis 
                         tickFormatter={(value) => `${value/1000}k`}
@@ -599,6 +655,12 @@ const Dashboard = () => {
                           formatCurrency(Number(value)), 
                           name ? name.charAt(0).toUpperCase() + name.slice(1) : ''
                         ]}
+                        labelFormatter={(label) => {
+                          if (isSingleDay) {
+                            return `Today at ${label}`;
+                          }
+                          return label;
+                        }}
                         contentStyle={{
                           backgroundColor: 'rgba(255, 255, 255, 0.95)',
                           border: '1px solid #e5e7eb',
@@ -622,23 +684,48 @@ const Dashboard = () => {
                         isAnimationActive={false}
                         active={isCapturing ? true : undefined}
                       />
-                      <Bar 
-                        dataKey="purchases" 
-                        fill="#3B82F6"
-                        radius={[4, 4, 0, 0]}
-                        barSize={20}
-                        name="Purchases"
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="sales" 
-                        stroke="#10B981"
-                        strokeWidth={2}
-                        dot={{ stroke: '#10B981', strokeWidth: 2, r: 4, fill: 'white' }}
-                        activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2, fill: '#10B981' }}
-                        name="Sales"
-                        isAnimationActive={false}
-                      />
+                      {isSingleDay ? (
+                        <>
+                          <Bar 
+                            dataKey="purchases" 
+                            fill="#3B82F6"
+                            radius={[4, 4, 0, 0]}
+                            barSize={10}
+                            name="Purchases"
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="sales"
+                            stroke="#10B981"
+                            fill="#10B98133"
+                            strokeWidth={2}
+                            dot={{ stroke: '#10B981', strokeWidth: 2, r: 2, fill: 'white' }}
+                            activeDot={{ r: 4, stroke: '#10B981', strokeWidth: 2, fill: '#10B981' }}
+                            name="Sales"
+                            isAnimationActive={false}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <Bar 
+                            dataKey="purchases" 
+                            fill="#3B82F6"
+                            radius={[4, 4, 0, 0]}
+                            barSize={20}
+                            name="Purchases"
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="sales" 
+                            stroke="#10B981"
+                            strokeWidth={2}
+                            dot={{ stroke: '#10B981', strokeWidth: 2, r: 4, fill: 'white' }}
+                            activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2, fill: '#10B981' }}
+                            name="Sales"
+                            isAnimationActive={false}
+                          />
+                        </>
+                      )}
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -769,29 +856,21 @@ const Dashboard = () => {
                     <PieChart>
                       <Pie
                         data={stockPieData}
+                        dataKey="value"
+                        nameKey="name"
                         cx="50%"
                         cy="50%"
-                        innerRadius={60}
                         outerRadius={80}
-                        paddingAngle={2}
-                        dataKey="value"
-                        label={({ name, percent }) => 
-                          `${name} (${(percent * 100).toFixed(0)}%)`
-                        }
-                        labelLine={false}
+                        innerRadius={40}
+                        paddingAngle={1}
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                       >
-                        {stockPieData.map((entry, index) => (
-                          <Cell 
-                            key={`cell-${index}`} 
-                            fill={colors[index % colors.length]} 
-                          />
+                        {stockPieData.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                         ))}
                       </Pie>
                       <Tooltip 
-                        formatter={(value, name: string) => [
-                          formatCurrency(Number(value)), 
-                          name ? name.charAt(0).toUpperCase() + name.slice(1) : ''
-                        ]} 
+                        formatter={(value) => formatQuantity(Number(value))}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -911,117 +990,200 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <Card>
             <CardHeader>
-              <CardTitle>Sales & Purchases Trend</CardTitle>
+              <CardTitle>
+                Sales & Purchases {isSingleDay ? 'Hourly' : 'Daily'} Trend
+                {isSingleDay && (
+                  <span className="ml-2 text-sm font-normal text-gray-500">
+                    (Showing hourly data for today)
+                  </span>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div ref={salesChartRef} className="h-80" id="sales-chart">
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart 
-                    data={salesChartData}
-                    onMouseMove={(data) => {
-                      if (data && data.activeTooltipIndex !== undefined) {
-                        lastTooltipIndex.current = data.activeTooltipIndex;
-                      }
-                    }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis 
-                      dataKey="date" 
-                      tickLine={false}
-                      axisLine={{ stroke: '#e5e7eb' }}
-                      style={{ fontSize: '0.75rem' }}
-                    />
-                    <YAxis 
-                      tickFormatter={(value) => {
-                        // If single day view, show time format
-                        if (isSingleDay) {
-                          return value; // Value is already formatted as time in statsDataAtom
+                  {isSingleDay ? (
+                    // For single day (hourly) view, use Area chart for better visualization
+                    <ComposedChart 
+                      data={defaultChartData}
+                      onMouseMove={(data) => {
+                        if (data && data.activeTooltipIndex !== undefined) {
+                          lastTooltipIndex.current = data.activeTooltipIndex;
                         }
-                        return value;
                       }}
-                      tickLine={false}
-                      axisLine={{ stroke: '#e5e7eb' }}
-                      style={{ fontSize: '0.75rem' }}
-                    />
-                    <Tooltip 
-                      formatter={(value, name: string) => [
-                        formatCurrency(Number(value)), 
-                        name ? name.charAt(0).toUpperCase() + name.slice(1) : ''
-                      ]}
-                      contentStyle={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '6px',
-                        padding: '8px 12px',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis 
+                        dataKey="date" 
+                        tickLine={false}
+                        axisLine={{ stroke: '#e5e7eb' }}
+                        style={{ fontSize: '0.75rem' }}
+                        interval={isSingleDay ? 2 : 0}
+                      />
+                      <YAxis 
+                        tickFormatter={(value) => formatCurrency(value)}
+                        tickLine={false}
+                        axisLine={{ stroke: '#e5e7eb' }}
+                        style={{ fontSize: '0.75rem' }}
+                        domain={[0, 'auto']} // Start from 0 for better visualization
+                      />
+                      <Tooltip 
+                        formatter={(value, name: string) => [
+                          formatCurrency(Number(value)), 
+                          name ? name.charAt(0).toUpperCase() + name.slice(1) : ''
+                        ]}
+                        labelFormatter={(label) => `Today at ${label}`}
+                        contentStyle={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '6px',
+                          padding: '8px 12px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                        }}
+                        itemStyle={{
+                          padding: '4px 0',
+                          color: '#374151'
+                        }}
+                        labelStyle={{
+                          marginBottom: '4px',
+                          fontWeight: 'bold',
+                          color: '#111827'
+                        }}
+                        cursor={{ strokeDasharray: '3 3' }}
+                        wrapperStyle={{
+                          outline: 'none'
+                        }}
+                        isAnimationActive={false}
+                        active={isCapturing ? true : undefined}
+                      />
+                      <Bar 
+                        dataKey="purchases" 
+                        fill="#3B82F6"
+                        radius={[4, 4, 0, 0]}
+                        barSize={20}
+                        name="Purchases"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="sales"
+                        stroke="#10B981"
+                        fill="#10B98133"
+                        strokeWidth={2}
+                        dot={{ stroke: '#10B981', strokeWidth: 2, r: 4, fill: 'white' }}
+                        activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2, fill: '#10B981' }}
+                        name="Sales"
+                        isAnimationActive={false}
+                      />
+                    </ComposedChart>
+                  ) : (
+                    // For multi-day view, use standard ComposedChart
+                    <ComposedChart 
+                      data={salesChartData}
+                      onMouseMove={(data) => {
+                        if (data && data.activeTooltipIndex !== undefined) {
+                          lastTooltipIndex.current = data.activeTooltipIndex;
+                        }
                       }}
-                      itemStyle={{
-                        padding: '4px 0',
-                        color: '#374151'
-                      }}
-                      labelStyle={{
-                        marginBottom: '4px',
-                        fontWeight: 'bold',
-                        color: '#111827'
-                      }}
-                      cursor={{ strokeDasharray: '3 3' }}
-                      wrapperStyle={{
-                        outline: 'none'
-                      }}
-                      isAnimationActive={false}
-                      active={isCapturing ? true : undefined}
-                    />
-                    <Bar 
-                      dataKey="purchases" 
-                      fill="#3B82F6"
-                      radius={[4, 4, 0, 0]}
-                      barSize={20}
-                      name="Purchases"
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="sales" 
-                      stroke="#10B981"
-                      strokeWidth={2}
-                      dot={{ stroke: '#10B981', strokeWidth: 2, r: 4, fill: 'white' }}
-                      activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2, fill: '#10B981' }}
-                      name="Sales"
-                      isAnimationActive={false}
-                    />
-                  </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader>
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis 
+                        dataKey="date" 
+                        tickLine={false}
+                        axisLine={{ stroke: '#e5e7eb' }}
+                        style={{ fontSize: '0.75rem' }}
+                      />
+                      <YAxis 
+                        tickFormatter={(value) => formatCurrency(value)}
+                        tickLine={false}
+                        axisLine={{ stroke: '#e5e7eb' }}
+                        style={{ fontSize: '0.75rem' }}
+                        domain={[0, 'auto']} // Start from 0 for better visualization
+                      />
+                      <Tooltip 
+                        formatter={(value, name: string) => [
+                          formatCurrency(Number(value)), 
+                          name ? name.charAt(0).toUpperCase() + name.slice(1) : ''
+                        ]}
+                        labelFormatter={(label) => label}
+                        contentStyle={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '6px',
+                          padding: '8px 12px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                        }}
+                        itemStyle={{
+                          padding: '4px 0',
+                          color: '#374151'
+                        }}
+                        labelStyle={{
+                          marginBottom: '4px',
+                          fontWeight: 'bold',
+                          color: '#111827'
+                        }}
+                        cursor={{ strokeDasharray: '3 3' }}
+                        wrapperStyle={{
+                          outline: 'none'
+                        }}
+                        isAnimationActive={false}
+                        active={isCapturing ? true : undefined}
+                      />
+                      <Bar 
+                        dataKey="purchases" 
+                        fill="#3B82F6"
+                        radius={[4, 4, 0, 0]}
+                        barSize={20}
+                        name="Purchases"
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="sales" 
+                        stroke="#10B981"
+                        strokeWidth={2}
+                        dot={{ stroke: '#10B981', strokeWidth: 2, r: 4, fill: 'white' }}
+                        activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2, fill: '#10B981' }}
+                        name="Sales"
+                        isAnimationActive={false}
+                      />
+                    </ComposedChart>
+                  )}
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
               <CardTitle>Stock Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
+            </CardHeader>
+            <CardContent>
               <div ref={stockChartRef} className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={dashboardData.stockList.filter(s => s.quantity > 0)}
-                      dataKey="quantity"
-                      nameKey="platform"
+                      data={stockPieData}
+                      dataKey="value"
+                      nameKey="name"
                       cx="50%"
                       cy="50%"
                       outerRadius={80}
-                      label={({ platform, quantity }) => `${platform}: ${formatQuantity(quantity)}`}
+                      innerRadius={40}
+                      paddingAngle={1}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                     >
-                      {dashboardData.stockList.map((_, index) => (
+                      {stockPieData.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip 
+                      formatter={(value) => formatQuantity(Number(value))}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
-            </div>
+        </div>
       )}
 
       {activeTab === 'cash' && (
@@ -1032,23 +1194,23 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div ref={cashChartRef} className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dashboardData.cashList}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="bank" />
-                  <YAxis />
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dashboardData.cashList}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="bank" />
+                    <YAxis />
                     <Tooltip formatter={(value) => formatCurrency(value as number)} />
                     <Bar dataKey="amount" fill={colors[0]} name="Amount">
                       {dashboardData.cashList.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                       ))}
                     </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Settings Modal */}
@@ -1189,8 +1351,8 @@ const Dashboard = () => {
                 value={newCashBalance}
                 onChange={(e) => setNewCashBalance(e.target.value)}
                 className="col-span-3"
-        />
-      </div>
+              />
+            </div>
           </div>
           
           <DialogFooter>

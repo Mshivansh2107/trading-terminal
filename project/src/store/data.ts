@@ -364,14 +364,19 @@ export const statsDataAtom = atom<StatsData>((get) => {
   // Group sales by day or hour depending on selection
   const salesByDayOrHour = filteredSales.reduce((acc: {date: string, isoDate: string, amount: number}[], sale) => {
     const date = new Date(sale.createdAt);
+    
     // Format differently based on single day or date range
-    const dateKey = isSingleDay 
-      ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
-      : date.toLocaleDateString();
-      
-    const isoDateKey = isSingleDay
-      ? `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`
-      : date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    let dateKey, isoDateKey;
+    
+    if (isSingleDay) {
+      // For single day view, group by hour of day
+      dateKey = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      isoDateKey = `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`;
+    } else {
+      // For multi-day view, group by date
+      dateKey = date.toLocaleDateString();
+      isoDateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    }
     
     const existingDate = acc.find(item => item.date === dateKey);
     
@@ -387,14 +392,19 @@ export const statsDataAtom = atom<StatsData>((get) => {
   // Group purchases by day or hour depending on selection
   const purchasesByDayOrHour = filteredPurchases.reduce((acc: {date: string, isoDate: string, amount: number}[], purchase) => {
     const date = new Date(purchase.createdAt);
+    
     // Format differently based on single day or date range
-    const dateKey = isSingleDay 
-      ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
-      : date.toLocaleDateString();
-      
-    const isoDateKey = isSingleDay
-      ? `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`
-      : date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    let dateKey, isoDateKey;
+    
+    if (isSingleDay) {
+      // For single day view, group by hour of day
+      dateKey = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      isoDateKey = `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`;
+    } else {
+      // For multi-day view, group by date
+      dateKey = date.toLocaleDateString();
+      isoDateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    }
     
     const existingDate = acc.find(item => item.date === dateKey);
     
@@ -412,14 +422,19 @@ export const statsDataAtom = atom<StatsData>((get) => {
     .filter(e => e.type === 'expense')
     .reduce((acc: {date: string, isoDate: string, amount: number}[], expense) => {
       const date = new Date(expense.createdAt);
+      
       // Format differently based on single day or date range
-      const dateKey = isSingleDay 
-        ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
-        : date.toLocaleDateString();
-        
-      const isoDateKey = isSingleDay
-        ? `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`
-        : date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      let dateKey, isoDateKey;
+      
+      if (isSingleDay) {
+        // For single day view, group by hour of day
+        dateKey = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        isoDateKey = `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`;
+      } else {
+        // For multi-day view, group by date
+        dateKey = date.toLocaleDateString();
+        isoDateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      }
       
       const existingDate = acc.find(item => item.date === dateKey);
       
@@ -437,14 +452,19 @@ export const statsDataAtom = atom<StatsData>((get) => {
     .filter(e => e.type === 'income')
     .reduce((acc: {date: string, isoDate: string, amount: number}[], income) => {
       const date = new Date(income.createdAt);
+      
       // Format differently based on single day or date range
-      const dateKey = isSingleDay 
-        ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
-        : date.toLocaleDateString();
-        
-      const isoDateKey = isSingleDay
-        ? `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`
-        : date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      let dateKey, isoDateKey;
+      
+      if (isSingleDay) {
+        // For single day view, group by hour of day
+        dateKey = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        isoDateKey = `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`;
+      } else {
+        // For multi-day view, group by date
+        dateKey = date.toLocaleDateString();
+        isoDateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      }
       
       const existingDate = acc.find(item => item.date === dateKey);
       
@@ -467,15 +487,21 @@ export const statsDataAtom = atom<StatsData>((get) => {
   incomesByDayOrHour.sort(sortByIsoDate);
   
   // If single day and no hourly data points, create empty time slots for visualization
-  if (isSingleDay && salesByDayOrHour.length < 12) {
-    const dateStr = new Date().toISOString().split('T')[0];
+  if (isSingleDay) {
+    // Get the selected date
+    const selectedDate = new Date(get(dateRangeAtom).startDate).toISOString().split('T')[0];
+    
+    // Create 24 hourly slots (for a full day) if we're in single-day mode
     const hours = Array.from({ length: 24 }, (_, i) => i);
     
     hours.forEach(hour => {
       const hourStr = hour.toString().padStart(2, '0');
       const timeStr = `${hourStr}:00`;
-      const formattedTime = new Date(`2000-01-01T${hourStr}:00:00`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const isoDateStr = `${dateStr}T${hourStr}:00:00Z`;
+      const formattedTime = new Date(`2000-01-01T${hourStr}:00:00`).toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      const isoDateStr = `${selectedDate}T${hourStr}:00:00Z`;
       
       // Add empty data points for each series if they don't exist
       if (!salesByDayOrHour.find(item => item.isoDate === isoDateStr)) {
