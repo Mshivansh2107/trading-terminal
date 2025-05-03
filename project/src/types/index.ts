@@ -175,3 +175,13 @@ export type BankEntity = {
   createdAt: Date;
   updatedAt: Date;
 };
+
+// Platform database entity type
+export type PlatformEntity = {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};

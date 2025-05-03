@@ -10,7 +10,8 @@ import {
   StatsData,
   Platform,
   Bank,
-  BankEntity
+  BankEntity,
+  PlatformEntity
 } from '../types';
 import { 
   calculateNetSales, 
@@ -166,6 +167,7 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   const transfers = get(transfersAtom);
   const expenses = get(expensesAtom);
   const settings = get(settingsAtom);
+  const availablePlatforms = get(platformsAtom);
   
   // Get filter functions and date range
   const filterByDate = get(filterByDateAtom);
@@ -212,17 +214,18 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   };
   
   // Calculate stock balances using the adjusted method
-  const mainPlatforms = [
-    'BINANCE AS', 'BYBIT AS', 'BITGET AS', 'KUCOIN AS',
-    'BINANCE SS', 'BYBIT SS', 'BITGET SS', 'KUCOIN SS'
-  ] as const;
+  // Get platforms from the platformsAtom if available
+  const platformNames = availablePlatforms.length > 0
+    ? availablePlatforms.filter(p => p.isActive).map(p => p.name as Platform)
+    : ['BINANCE AS', 'BYBIT AS', 'BITGET AS', 'KUCOIN AS',
+       'BINANCE SS', 'BYBIT SS', 'BITGET SS', 'KUCOIN SS'] as Platform[];
   
-  const stockList = mainPlatforms.map(platform => ({
-    platform: platform as Platform,
+  const stockList = platformNames.map(platform => ({
+    platform,
     quantity: calculateAdjustedStockBalance(platform)
   }))
-  // Only hide zero quantity platforms if they're not one of our main platforms
-  .filter(stock => stock.quantity !== 0 || mainPlatforms.includes(stock.platform as any));
+  // Only include platforms with non-zero quantities or if they're active in the platforms list
+  .filter(stock => stock.quantity !== 0 || platformNames.includes(stock.platform));
   
   // Similarly calculate cash balances up to the filter end date
   const calculateAdjustedBankBalance = (bank: Bank) => {
@@ -350,6 +353,7 @@ export const statsDataAtom = atom<StatsData>((get) => {
   const sales = get(salesAtom);
   const purchases = get(purchasesAtom);
   const expenses = get(expensesAtom);
+  const availablePlatforms = get(platformsAtom);
   
   // Get filter functions
   const filterByDate = get(filterByDateAtom);
@@ -552,28 +556,48 @@ export const statsDataAtom = atom<StatsData>((get) => {
       })) as typeof salesByBank;
   }
   
+  // Get platform names from platformsAtom
+  const platformsList = availablePlatforms.length > 0
+    ? availablePlatforms
+        .filter(platform => platform.isActive)
+        .map(platform => ({
+          platform: platform.name as Platform,
+          amount: calculatePlatformTotal(filteredSales, platform.name)
+        }))
+    : [
+        { platform: 'BINANCE SS' as const, amount: calculatePlatformTotal(filteredSales, 'BINANCE SS') },
+        { platform: 'BINANCE AS' as const, amount: calculatePlatformTotal(filteredSales, 'BINANCE AS') },
+        { platform: 'BYBIT AS' as const, amount: calculatePlatformTotal(filteredSales, 'BYBIT AS') },
+        { platform: 'BITGET SS' as const, amount: calculatePlatformTotal(filteredSales, 'BITGET SS') },
+      ];
+
+  // Generate platform purchase statistics
+  const platformPurchasesList = availablePlatforms.length > 0
+    ? availablePlatforms
+        .filter(platform => platform.isActive)
+        .map(platform => ({
+          platform: platform.name as Platform,
+          amount: calculatePlatformTotal(filteredPurchases, platform.name)
+        }))
+    : [
+        { platform: 'BINANCE SS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BINANCE SS') },
+        { platform: 'BINANCE AS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BINANCE AS') },
+        { platform: 'BYBIT AS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BYBIT AS') },
+        { platform: 'BITGET SS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BITGET SS') },
+      ];
+  
   return {
     salesByDay: salesByDayOrHour,
     purchasesByDay: purchasesByDayOrHour,
     expensesByDay: expensesByDayOrHour,
     incomesByDay: incomesByDayOrHour,
     salesByBank: banksList,
-    salesByPlatform: [
-      { platform: 'BINANCE SS' as const, amount: calculatePlatformTotal(filteredSales, 'BINANCE SS') },
-      { platform: 'BINANCE AS' as const, amount: calculatePlatformTotal(filteredSales, 'BINANCE AS') },
-      { platform: 'BYBIT AS' as const, amount: calculatePlatformTotal(filteredSales, 'BYBIT AS') },
-      { platform: 'BITGET SS' as const, amount: calculatePlatformTotal(filteredSales, 'BITGET SS') },
-    ],
+    salesByPlatform: platformsList,
     purchasesByBank: banksList.map(bankItem => ({
       bank: bankItem.bank,
       amount: calculateBankTotal(filteredPurchases, bankItem.bank)
     })),
-    purchasesByPlatform: [
-      { platform: 'BINANCE SS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BINANCE SS') },
-      { platform: 'BINANCE AS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BINANCE AS') },
-      { platform: 'BYBIT AS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BYBIT AS') },
-      { platform: 'BITGET SS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BITGET SS') },
-    ],
+    purchasesByPlatform: platformPurchasesList,
     expensesByBank: banksList.map(bankItem => ({
       bank: bankItem.bank,
       amount: filteredExpenses.filter(e => e.bank === bankItem.bank && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
@@ -944,8 +968,9 @@ export const refreshDataAtom = atom(
     }
     
     try {
-      // Fetch banks
+      // Fetch banks and platforms
       set(fetchBanksAtom);
+      set(fetchPlatformsAtom);
       
       // Fetch sales
       const { data: salesData, error: salesError } = await supabase
@@ -1663,6 +1688,162 @@ export const deleteBankAtom = atom(
       set(banksAtom, banks.filter(b => b.id !== bankId));
     } catch (error) {
       console.error('Error deleting bank:', error);
+      throw error;
+    }
+  }
+);
+
+// Add platformsAtom after banksAtom
+export const platformsAtom = atom<PlatformEntity[]>([]);
+
+// Function to fetch platforms from database
+export const fetchPlatformsAtom = atom(
+  null,
+  async (get, set) => {
+    try {
+      const { data, error } = await supabase
+        .from('platforms')
+        .select('*')
+        .order('name', { ascending: true });
+      
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        // Map database results to PlatformEntity
+        const formattedPlatforms: PlatformEntity[] = data.map(platform => ({
+          id: platform.id,
+          name: platform.name,
+          description: platform.description,
+          isActive: platform.is_active,
+          createdAt: new Date(platform.created_at),
+          updatedAt: new Date(platform.updated_at || platform.created_at)
+        }));
+        set(platformsAtom, formattedPlatforms);
+      } else {
+        // Fallback platforms if none in database
+        const fallbackPlatforms: PlatformEntity[] = [
+          { id: 'binance-ss', name: 'BINANCE SS', description: 'Binance Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+          { id: 'binance-as', name: 'BINANCE AS', description: 'Binance Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+          { id: 'bybit-ss', name: 'BYBIT SS', description: 'Bybit Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+          { id: 'bybit-as', name: 'BYBIT AS', description: 'Bybit Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+          { id: 'bitget-ss', name: 'BITGET SS', description: 'Bitget Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+          { id: 'bitget-as', name: 'BITGET AS', description: 'Bitget Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+          { id: 'kucoin-ss', name: 'KUCOIN SS', description: 'KuCoin Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+          { id: 'kucoin-as', name: 'KUCOIN AS', description: 'KuCoin Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        ];
+        set(platformsAtom, fallbackPlatforms);
+      }
+    } catch (error) {
+      console.error('Error fetching platforms:', error);
+      // Use fallback platforms on error
+      const fallbackPlatforms: PlatformEntity[] = [
+        { id: 'binance-ss', name: 'BINANCE SS', description: 'Binance Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'binance-as', name: 'BINANCE AS', description: 'Binance Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'bybit-ss', name: 'BYBIT SS', description: 'Bybit Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'bybit-as', name: 'BYBIT AS', description: 'Bybit Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'bitget-ss', name: 'BITGET SS', description: 'Bitget Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'bitget-as', name: 'BITGET AS', description: 'Bitget Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'kucoin-ss', name: 'KUCOIN SS', description: 'KuCoin Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'kucoin-as', name: 'KUCOIN AS', description: 'KuCoin Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      ];
+      set(platformsAtom, fallbackPlatforms);
+    }
+  }
+);
+
+// Add platform function
+export const addPlatformAtom = atom(
+  null,
+  async (get, set, platform: Omit<PlatformEntity, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const platforms = get(platformsAtom);
+    
+    try {
+      const { data, error } = await supabase
+        .from('platforms')
+        .insert({
+          name: platform.name,
+          description: platform.description,
+          is_active: platform.isActive
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error adding platform:', error);
+        throw error;
+      }
+      
+      const newPlatform: PlatformEntity = {
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        isActive: data.is_active,
+        createdAt: new Date(data.created_at),
+        updatedAt: new Date(data.updated_at)
+      };
+      
+      set(platformsAtom, [...platforms, newPlatform]);
+      return newPlatform;
+    } catch (error) {
+      console.error('Error adding platform:', error);
+      throw error;
+    }
+  }
+);
+
+// Update platform function
+export const updatePlatformAtom = atom(
+  null,
+  async (get, set, platform: PlatformEntity) => {
+    const platforms = get(platformsAtom);
+    
+    try {
+      const { error } = await supabase
+        .from('platforms')
+        .update({
+          name: platform.name,
+          description: platform.description,
+          is_active: platform.isActive,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', platform.id);
+      
+      if (error) {
+        console.error('Error updating platform:', error);
+        throw error;
+      }
+      
+      set(platformsAtom, platforms.map(p => p.id === platform.id ? { ...platform, updatedAt: new Date() } : p));
+      return platform;
+    } catch (error) {
+      console.error('Error updating platform:', error);
+      throw error;
+    }
+  }
+);
+
+// Delete platform function
+export const deletePlatformAtom = atom(
+  null,
+  async (get, set, platformId: string) => {
+    const platforms = get(platformsAtom);
+    
+    try {
+      const { error } = await supabase
+        .from('platforms')
+        .delete()
+        .eq('id', platformId);
+      
+      if (error) {
+        console.error('Error deleting platform:', error);
+        throw error;
+      }
+      
+      set(platformsAtom, platforms.filter(p => p.id !== platformId));
+    } catch (error) {
+      console.error('Error deleting platform:', error);
       throw error;
     }
   }

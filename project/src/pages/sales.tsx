@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAtom } from 'jotai';
-import { salesAtom, addSaleAtom, updateSaleAtom, deleteSaleAtom, banksAtom, refreshDataAtom } from '../store/data';
+import { salesAtom, addSaleAtom, updateSaleAtom, deleteSaleAtom, banksAtom, platformsAtom, refreshDataAtom } from '../store/data';
 import { formatCurrency, formatQuantity, formatDateTime } from '../lib/utils';
 import DataTable from '../components/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -20,6 +20,7 @@ const Sales = () => {
   const [, refreshData] = useAtom(refreshDataAtom);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [banks] = useAtom(banksAtom);
+  const [platforms] = useAtom(platformsAtom);
   const [showForm, setShowForm] = useState(false);
   const [editingSale, setEditingSale] = useState<SalesEntry | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -192,16 +193,30 @@ const Sales = () => {
     }
   ], [handleEdit, handleDelete]);
   
-  const platforms = [
-    { value: 'BINANCE SS', label: 'BINANCE SS' },
-    { value: 'BINANCE AS', label: 'BINANCE AS' },
-    { value: 'BYBIT SS', label: 'BYBIT SS' },
-    { value: 'BYBIT AS', label: 'BYBIT AS' },
-    { value: 'BITGET SS', label: 'BITGET SS' },
-    { value: 'BITGET AS', label: 'BITGET AS' },
-    { value: 'KUCOIN SS', label: 'KUCOIN SS' },
-    { value: 'KUCOIN AS', label: 'KUCOIN AS' },
-  ];
+  // Replace hardcoded platforms with data from database
+  const platformOptions = useMemo(() => {
+    // Use platforms from the store if available
+    if (platforms && platforms.length > 0) {
+      return platforms
+        .filter(platform => platform.isActive)
+        .map(platform => ({
+          value: platform.name,
+          label: platform.name
+        }));
+    }
+    
+    // Fallback to hardcoded platforms if no data is available
+    return [
+      { value: 'BINANCE SS', label: 'BINANCE SS' },
+      { value: 'BINANCE AS', label: 'BINANCE AS' },
+      { value: 'BYBIT SS', label: 'BYBIT SS' },
+      { value: 'BYBIT AS', label: 'BYBIT AS' },
+      { value: 'BITGET SS', label: 'BITGET SS' },
+      { value: 'BITGET AS', label: 'BITGET AS' },
+      { value: 'KUCOIN SS', label: 'KUCOIN SS' },
+      { value: 'KUCOIN AS', label: 'KUCOIN AS' },
+    ];
+  }, [platforms]);
   
   // Add a useMemo hook to get dynamic bank options
   const bankOptions = useMemo(() => {
@@ -227,7 +242,7 @@ const Sales = () => {
     { value: 'PNB', label: 'PNB' },
   ];
   }, [banks]);
-  
+
   const currencies = [
     { value: 'USDT', label: 'USDT' },
     { value: 'INR', label: 'INR' },
@@ -296,7 +311,7 @@ const Sales = () => {
                     name="platform"
                     type="select"
                     required
-                    options={platforms}
+                    options={platformOptions}
                   />
                   
                   <FormField

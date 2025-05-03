@@ -21,7 +21,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { dashboardDataAtom, refreshDataAtom, statsDataAtom, settingsAtom, salesAtom, purchasesAtom, transfersAtom, updateStockBalanceAtom, updateCashBalanceAtom, banksAtom } from '../store/data';
+import { dashboardDataAtom, refreshDataAtom, statsDataAtom, settingsAtom, salesAtom, purchasesAtom, transfersAtom, updateStockBalanceAtom, updateCashBalanceAtom, banksAtom, platformsAtom } from '../store/data';
 import DashboardCard from '../components/layout/dashboard-card';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { formatCurrency, formatQuantity, prepareExportData } from '../lib/utils';
@@ -48,6 +48,7 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import DateRangeFilter from '../components/date-range-filter';
 import { dateRangeAtom, isSingleDaySelectionAtom, formatDateByRangeAtom } from '../store/filters';
+import { PlatformSelector } from '../components/ui/platform-selector';
 
 const Dashboard = () => {
   const [dashboardData] = useAtom(dashboardDataAtom);
@@ -1241,30 +1242,12 @@ const Dashboard = () => {
                     disabled
                   />
                 ) : (
-                  <select
-                    id="platform"
+                  <PlatformSelector
                     value={selectedPlatform}
-                    onChange={(e) => setSelectedPlatform(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  >
-                    <option value="" disabled>Select platform</option>
-                    {/* Show existing platforms first */}
-                    {dashboardData.stockList.map((stock) => (
-                      <option key={stock.platform} value={stock.platform}>
-                        {stock.platform}
-                      </option>
-                    ))}
-                    {/* Then show other standard platforms */}
-                    {["BINANCE AS", "BYBIT AS", "BITGET AS", "KUCOIN AS", 
-                      "BINANCE SS", "BYBIT SS", "BITGET SS", "KUCOIN SS"]
-                      .filter(platform => !dashboardData.stockList.some(s => s.platform === platform))
-                      .map(platform => (
-                        <option key={platform} value={platform}>
-                          {platform}
-                        </option>
-                      ))
-                    }
-                  </select>
+                    onChange={setSelectedPlatform}
+                    placeholder="Select a platform"
+                    required
+                  />
                 )}
               </div>
             </div>

@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAtom } from 'jotai';
-import { transfersAtom, addTransferAtom, updateTransferAtom, deleteTransferAtom } from '../store/data';
+import { transfersAtom, addTransferAtom, updateTransferAtom, deleteTransferAtom, platformsAtom, fetchPlatformsAtom } from '../store/data';
 import { formatQuantity, formatDateTime } from '../lib/utils';
 import DataTable from '../components/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -11,34 +11,71 @@ import EditTransactionModal from '../components/edit-transaction-modal';
 import { TransferEntry, Platform } from '../types';
 import DateRangeFilter from '../components/date-range-filter';
 import { filterByDateAtom, dateRangeAtom } from '../store/filters';
+import { PlatformSelector } from '../components/ui/platform-selector';
 
 const Transfer = () => {
   const [transfers] = useAtom(transfersAtom);
   const [, addTransfer] = useAtom(addTransferAtom);
   const [, updateTransfer] = useAtom(updateTransferAtom);
   const [, deleteTransfer] = useAtom(deleteTransferAtom);
+  const [platforms] = useAtom(platformsAtom);
+  const [, fetchPlatforms] = useAtom(fetchPlatformsAtom);
   const [showForm, setShowForm] = useState(false);
   const [editingTransfer, setEditingTransfer] = useState<TransferEntry | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [filterByDate] = useAtom(filterByDateAtom);
   const [dateRange] = useAtom(dateRangeAtom);
   
+  // Load platforms when component mounts
+  useEffect(() => {
+    console.log("Loading platforms...");
+    fetchPlatforms().then(() => {
+      console.log("Platforms loaded:", platforms);
+    });
+  }, [fetchPlatforms]);
+  
+  // Form state for new transfer
+  const [fromPlatform, setFromPlatform] = useState('');
+  const [toPlatform, setToPlatform] = useState('');
+  const [quantity, setQuantity] = useState('');
+  
+  // Handlers for platform selection
+  const handleFromPlatformChange = (value: string) => {
+    console.log('From platform selected:', value);
+    setFromPlatform(value);
+  };
+  
+  const handleToPlatformChange = (value: string) => {
+    console.log('To platform selected:', value);
+    setToPlatform(value);
+  };
+  
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    const formData = new FormData(e.currentTarget);
+    if (!fromPlatform || !toPlatform || !quantity) {
+      alert("Please fill in all required fields");
+      return;
+    }
+    
     const newTransfer = {
-      from: formData.get('from') as Platform,
-      to: formData.get('to') as Platform,
-      quantity: parseFloat(formData.get('quantity') as string),
+      from: fromPlatform as Platform,
+      to: toPlatform as Platform,
+      quantity: parseFloat(quantity),
     };
     
+    console.log('Adding new transfer:', newTransfer);
     addTransfer(newTransfer);
-    e.currentTarget.reset();
+    
+    // Reset form
+    setFromPlatform('');
+    setToPlatform('');
+    setQuantity('');
     setShowForm(false);
   };
   
   const handleEdit = (transfer: TransferEntry) => {
+    console.log('Editing transfer:', transfer);
     setEditingTransfer(transfer);
     setIsEditModalOpen(true);
   };
@@ -51,12 +88,14 @@ const Transfer = () => {
   }, [deleteTransfer]);
   
   const handleSaveEdit = (updatedData: any) => {
+    console.log('Saving updated transfer:', updatedData);
     updateTransfer({
       ...updatedData,
       // Ensure createdAt remains as a Date object
       createdAt: new Date(updatedData.createdAt)
     });
     setEditingTransfer(null);
+    setIsEditModalOpen(false);
   };
   
   const columns = useMemo(() => [
@@ -99,25 +138,22 @@ const Transfer = () => {
       variant: 'ghost' as const
     }
   ], [handleEdit, handleDelete]);
-  
-  const platforms = [
-    { value: 'BINANCE SS', label: 'BINANCE SS' },
-    { value: 'BINANCE AS', label: 'BINANCE AS' },
-    { value: 'BYBIT SS', label: 'BYBIT SS' },
-    { value: 'BYBIT AS', label: 'BYBIT AS' },
-    { value: 'BITGET SS', label: 'BITGET SS' },
-    { value: 'BITGET AS', label: 'BITGET AS' },
-    { value: 'KUCOIN SS', label: 'KUCOIN SS' },
-    { value: 'KUCOIN AS', label: 'KUCOIN AS' },
-  ];
 
   // Compute platform totals
   const platformTotals = useMemo(() => {
     const totals = new Map();
     
+    // Get platform names from the platformsAtom
+    const platformNames = platforms.length > 0
+      ? platforms.filter(p => p.isActive).map(p => p.name)
+      : [
+          'BINANCE SS', 'BINANCE AS', 'BYBIT SS', 'BYBIT AS', 
+          'BITGET SS', 'BITGET AS', 'KUCOIN SS', 'KUCOIN AS'
+        ];
+    
     // Initialize all platforms with zeros
-    platforms.forEach(platform => {
-      totals.set(platform.value, { platform: platform.value, from: 0, to: 0, net: 0 });
+    platformNames.forEach(platform => {
+      totals.set(platform, { platform, from: 0, to: 0, net: 0 });
     });
     
     // Calculate totals
@@ -174,33 +210,45 @@ const Transfer = () => {
           <CardContent>
             <form onSubmit={handleSubmit}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  label="From Platform"
-                  name="from"
-                  type="select"
-                  required
-                  options={platforms}
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    From Platform
+                  </label>
+                  <PlatformSelector
+                    value={fromPlatform}
+                    onChange={handleFromPlatformChange}
+                    placeholder="Select from platform"
+                    required
+                  />
+                </div>
                 
-                <FormField
-                  label="To Platform"
-                  name="to"
-                  type="select" 
-                  required
-                  options={platforms}
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    To Platform
+                  </label>
+                  <PlatformSelector
+                    value={toPlatform}
+                    onChange={handleToPlatformChange}
+                    placeholder="Select to platform"
+                    required
+                  />
+                </div>
                 
-                <FormField
-                  label="Quantity"
-                  name="quantity" 
-                  type="number"
-                  required
-                  inputProps={{ 
-                    step: "0.00000001",
-                    min: "0",
-                    placeholder: "Enter Quantity"
-                  }}
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Quantity
+                  </label>
+                  <input 
+                    type="number"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    step="0.00000001"
+                    min="0"
+                    placeholder="Enter Quantity"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                </div>
               </div>
               
               <div className="mt-6 flex justify-end space-x-4">
@@ -275,7 +323,7 @@ const Transfer = () => {
           onSave={handleSaveEdit}
           data={editingTransfer}
           type="transfer"
-          platforms={platforms}
+          platforms={platforms.filter(p => p.isActive).map(p => ({ value: p.name, label: p.name }))}
         />
       )}
     </div>

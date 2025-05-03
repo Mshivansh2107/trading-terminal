@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAtom } from 'jotai';
-import { purchasesAtom, addPurchaseAtom, updatePurchaseAtom, deletePurchaseAtom, banksAtom, refreshDataAtom } from '../store/data';
+import { purchasesAtom, addPurchaseAtom, updatePurchaseAtom, deletePurchaseAtom, banksAtom, platformsAtom, refreshDataAtom } from '../store/data';
 import { formatCurrency, formatQuantity, formatDateTime } from '../lib/utils';
 import DataTable from '../components/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -185,18 +185,8 @@ const Purchase = () => {
     }
   ], [handleEdit, handleDelete]);
   
-  const platforms = [
-    { value: 'BINANCE SS', label: 'BINANCE SS' },
-    { value: 'BINANCE AS', label: 'BINANCE AS' },
-    { value: 'BYBIT SS', label: 'BYBIT SS' },
-    { value: 'BYBIT AS', label: 'BYBIT AS' },
-    { value: 'BITGET SS', label: 'BITGET SS' },
-    { value: 'BITGET AS', label: 'BITGET AS' },
-    { value: 'KUCOIN SS', label: 'KUCOIN SS' },
-    { value: 'KUCOIN AS', label: 'KUCOIN AS' },
-  ];
-  
   const [banks] = useAtom(banksAtom);
+  const [platforms] = useAtom(platformsAtom);
   
   const bankOptions = useMemo(() => {
     if (banks && banks.length > 0) {
@@ -225,6 +215,31 @@ const Purchase = () => {
     { value: 'INR', label: 'INR' },
   ];
 
+  // Replace hardcoded platforms with data from database
+  const platformOptions = useMemo(() => {
+    // Use platforms from the store if available
+    if (platforms && platforms.length > 0) {
+      return platforms
+        .filter(platform => platform.isActive)
+        .map(platform => ({
+          value: platform.name,
+          label: platform.name
+        }));
+    }
+    
+    // Fallback to hardcoded platforms if no data is available
+    return [
+      { value: 'BINANCE SS', label: 'BINANCE SS' },
+      { value: 'BINANCE AS', label: 'BINANCE AS' },
+      { value: 'BYBIT SS', label: 'BYBIT SS' },
+      { value: 'BYBIT AS', label: 'BYBIT AS' },
+      { value: 'BITGET SS', label: 'BITGET SS' },
+      { value: 'BITGET AS', label: 'BITGET AS' },
+      { value: 'KUCOIN SS', label: 'KUCOIN SS' },
+      { value: 'KUCOIN AS', label: 'KUCOIN AS' },
+    ];
+  }, [platforms]);
+  
   // Filter purchases data by date range
   const filteredPurchases = useMemo(() => {
     return filterByDate(purchases);
@@ -294,7 +309,7 @@ const Purchase = () => {
                     name="platform"
                     type="select"
                     required
-                    options={platforms}
+                    options={platformOptions}
                   />
                   
                   <FormField
