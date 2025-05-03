@@ -153,131 +153,145 @@ function Transactions() {
   };
   
   return (
-    <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Transactions</h1>
-          <p className="text-gray-500">View and manage all transactions</p>
+    <div className="flex flex-col h-full p-4 md:p-6 bg-gray-50 min-h-screen w-full">
+      {/* Fixed header area */}
+      <div className="flex flex-col space-y-4 w-full mb-4">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Transactions</h1>
+            <p className="text-gray-500">View and manage all transactions</p>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-2">
+            <DateRangeFilter />
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefresh}
+              disabled={isLoading}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              {isLoading ? 'Refreshing...' : 'Refresh'}
+            </Button>
+          </div>
         </div>
         
-        <div className="flex flex-wrap items-center gap-2">
-          <DateRangeFilter />
-          
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleRefresh}
-            disabled={isLoading}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            {isLoading ? 'Refreshing...' : 'Refresh'}
-          </Button>
+        {/* Filter options */}
+        <div className="mb-2">
+          <div className="flex flex-wrap gap-2">
+            <Button 
+              variant={transactionType === 'all' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setTransactionType('all')}
+            >
+              All
+            </Button>
+            <Button 
+              variant={transactionType === 'sales' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setTransactionType('sales')}
+            >
+              Sales
+            </Button>
+            <Button 
+              variant={transactionType === 'purchases' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setTransactionType('purchases')}
+            >
+              Purchases
+            </Button>
+            <Button 
+              variant={transactionType === 'transfers' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setTransactionType('transfers')}
+            >
+              Transfers
+            </Button>
+          </div>
         </div>
       </div>
       
-      {/* Filter options */}
-      <div className="mb-6">
-        <div className="flex flex-wrap gap-2">
-          <Button 
-            variant={transactionType === 'all' ? 'default' : 'outline'} 
-            size="sm"
-            onClick={() => setTransactionType('all')}
-          >
-            All
-          </Button>
-          <Button 
-            variant={transactionType === 'sales' ? 'default' : 'outline'} 
-            size="sm"
-            onClick={() => setTransactionType('sales')}
-          >
-            Sales
-          </Button>
-          <Button 
-            variant={transactionType === 'purchases' ? 'default' : 'outline'} 
-            size="sm"
-            onClick={() => setTransactionType('purchases')}
-          >
-            Purchases
-          </Button>
-          <Button 
-            variant={transactionType === 'transfers' ? 'default' : 'outline'} 
-            size="sm"
-            onClick={() => setTransactionType('transfers')}
-          >
-            Transfers
-          </Button>
-        </div>
-      </div>
-      
-      {/* Transactions table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex justify-between items-center">
-            <span>
-              Transactions
-              {dateRange.isActive && (
-                <span className="ml-2 text-sm font-normal text-gray-500">
-                  (Filtered by date range)
-                </span>
-              )}
-            </span>
-            <span className="text-sm font-normal text-gray-500">
-              {sortedTransactions.length} results
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="cursor-pointer" onClick={() => handleSort('type')}>
-                    Type
-                    {sortField === 'type' && (
-                      <ArrowUpDown className="inline ml-1 h-4 w-4" />
-                    )}
-                  </TableHead>
-                  <TableHead>Entity</TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => handleSort('createdAt')}>
-                    Date
-                    {sortField === 'createdAt' && (
-                      <ArrowUpDown className="inline ml-1 h-4 w-4" />
-                    )}
-                  </TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedTransactions.length > 0 ? (
-                  sortedTransactions.map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell className="font-medium capitalize">
-                        {transaction.type}
-                      </TableCell>
-                      <TableCell>{renderEntity(transaction)}</TableCell>
-                      <TableCell>
-                        {new Date(transaction.createdAt).toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {renderAmount(transaction)}
+      {/* Transactions table with contained scrolling */}
+      <div className="w-full" style={{ overflowX: 'hidden' }}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex justify-between items-center">
+              <span>
+                Transactions
+                {dateRange.isActive && (
+                  <span className="ml-2 text-sm font-normal text-gray-500">
+                    (Filtered by date range)
+                  </span>
+                )}
+              </span>
+              <span className="text-sm font-normal text-gray-500">
+                {sortedTransactions.length} results
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead 
+                      className="cursor-pointer whitespace-nowrap" 
+                      onClick={() => handleSort('type')}
+                      style={{ minWidth: '100px' }}
+                    >
+                      Type
+                      {sortField === 'type' && (
+                        <ArrowUpDown className="inline ml-1 h-4 w-4" />
+                      )}
+                    </TableHead>
+                    <TableHead style={{ minWidth: '250px' }} className="whitespace-nowrap">Entity</TableHead>
+                    <TableHead 
+                      className="cursor-pointer whitespace-nowrap" 
+                      onClick={() => handleSort('createdAt')}
+                      style={{ minWidth: '150px' }}
+                    >
+                      Date
+                      {sortField === 'createdAt' && (
+                        <ArrowUpDown className="inline ml-1 h-4 w-4" />
+                      )}
+                    </TableHead>
+                    <TableHead className="text-right whitespace-nowrap" style={{ minWidth: '120px' }}>Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedTransactions.length > 0 ? (
+                    sortedTransactions.map((transaction, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="capitalize whitespace-nowrap">
+                          {transaction.type}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {renderEntity(transaction)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {new Date(transaction.createdAt).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          {renderAmount(transaction)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center h-24 text-gray-500">
+                        No transactions found
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-gray-500">
-                      No transactions found
-                      {dateRange.isActive && " for the selected date range"}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

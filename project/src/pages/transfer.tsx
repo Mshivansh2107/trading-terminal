@@ -156,13 +156,13 @@ const Transfer = () => {
         <h1 className="text-2xl font-bold">Transfers</h1>
         <div className="flex items-center gap-2">
           <DateRangeFilter />
-          <Button 
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" />
-            {showForm ? 'Cancel' : 'New Transfer'}
-          </Button>
+        <Button 
+          onClick={() => setShowForm(!showForm)}
+          className="flex items-center"
+        >
+          <PlusCircle className="mr-2 h-4 w-4" />
+          {showForm ? 'Cancel' : 'New Transfer'}
+        </Button>
         </div>
       </div>
       

@@ -21,6 +21,7 @@ import AdminUsers from './pages/admin/users';
 
 // Components
 import Navbar from './components/layout/navbar';
+import GlobalDateFilter from './components/global-date-filter';
 
 // Authenticated route wrapper
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -86,72 +87,75 @@ function App() {
   return (
     <Router>
       <ToastProvider>
-      <div className="min-h-screen bg-gray-50 flex">
+      <div className="min-h-screen bg-gray-50 flex overflow-hidden">
         <Navbar />
         
-          <main className={`flex-1 ${authState.isAuthenticated ? 'ml-16 md:ml-64' : ''} min-h-screen bg-gray-50 transition-all duration-300 ease-in-out`}>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-            
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/sales" element={
-              <ProtectedRoute>
-                <Sales />
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/purchase" element={
-              <ProtectedRoute>
-                <Purchase />
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/transfer" element={
-              <ProtectedRoute>
-                <Transfer />
-              </ProtectedRoute>
-            } />
+          <main className={`flex-1 ${authState.isAuthenticated ? 'ml-16 md:ml-64' : ''} min-h-screen bg-gray-50 transition-all duration-300 ease-in-out overflow-x-hidden`}>
+          {authState.isAuthenticated && <GlobalDateFilter />}
+          <div className="w-full overflow-x-hidden">
+            <Routes>
+              <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
               
-              <Route path="/bank-transfer" element={
+              <Route path="/" element={
                 <ProtectedRoute>
-                  <BankTransfer />
+                  <Dashboard />
                 </ProtectedRoute>
               } />
               
-              <Route path="/expenses" element={
+              <Route path="/sales" element={
                 <ProtectedRoute>
-                  <Expenses />
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/banks" element={
-              <ProtectedRoute>
-                <Banks />
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/stats" element={
-              <ProtectedRoute>
-                <Stats />
-              </ProtectedRoute>
-            } />
+                  <Sales />
+                </ProtectedRoute>
+              } />
               
-              {/* Admin Routes */}
-              <Route path="/admin/users" element={
-                <AdminRoute>
-                  <AdminUsers />
-                </AdminRoute>
-            } />
-            
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+              <Route path="/purchase" element={
+                <ProtectedRoute>
+                  <Purchase />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/transfer" element={
+                <ProtectedRoute>
+                  <Transfer />
+                </ProtectedRoute>
+              } />
+                
+                <Route path="/bank-transfer" element={
+                  <ProtectedRoute>
+                    <BankTransfer />
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/expenses" element={
+                  <ProtectedRoute>
+                    <Expenses />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/banks" element={
+                <ProtectedRoute>
+                  <Banks />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/stats" element={
+                <ProtectedRoute>
+                  <Stats />
+                </ProtectedRoute>
+              } />
+                
+                {/* Admin Routes */}
+                <Route path="/admin/users" element={
+                  <AdminRoute>
+                    <AdminUsers />
+                  </AdminRoute>
+              } />
+              
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </div>
         </main>
       </div>
       </ToastProvider>

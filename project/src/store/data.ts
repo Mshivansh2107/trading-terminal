@@ -22,7 +22,13 @@ import {
 import { supabase } from '../lib/supabase';
 import { authStateAtom } from './supabaseAuth';
 import { getUsdtPrice } from '../lib/usdtPrice';
-import { filterByDateAtom, isDateInRangeAtom, dateRangeAtom } from './filters';
+import { 
+  filterByDateAtom, 
+  isDateInRangeAtom, 
+  dateRangeAtom, 
+  isSingleDaySelectionAtom,
+  formatDateByRangeAtom
+} from './filters';
 import { formatDate } from '../lib/utils';
 
 // Initial data store
@@ -347,79 +353,154 @@ export const statsDataAtom = atom<StatsData>((get) => {
   
   // Get filter functions
   const filterByDate = get(filterByDateAtom);
+  const isSingleDay = get(isSingleDaySelectionAtom);
+  const formatDateByRange = get(formatDateByRangeAtom);
   
   // Apply date filtering
   const filteredSales = filterByDate(sales);
   const filteredPurchases = filterByDate(purchases);
   const filteredExpenses = filterByDate(expenses);
   
-  // Group sales by day
-  const salesByDay = filteredSales.reduce((acc: {date: string, isoDate: string, amount: number}[], sale) => {
+  // Group sales by day or hour depending on selection
+  const salesByDayOrHour = filteredSales.reduce((acc: {date: string, isoDate: string, amount: number}[], sale) => {
     const date = new Date(sale.createdAt);
-    const dateString = date.toLocaleDateString();
-    const isoDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
-    const existingDate = acc.find(item => item.date === dateString);
+    // Format differently based on single day or date range
+    const dateKey = isSingleDay 
+      ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+      : date.toLocaleDateString();
+      
+    const isoDateKey = isSingleDay
+      ? `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`
+      : date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    const existingDate = acc.find(item => item.date === dateKey);
     
     if (existingDate) {
       existingDate.amount += sale.totalPrice;
     } else {
-      acc.push({ date: dateString, isoDate, amount: sale.totalPrice });
+      acc.push({ date: dateKey, isoDate: isoDateKey, amount: sale.totalPrice });
     }
     
     return acc;
   }, []);
   
-  // Group purchases by day
-  const purchasesByDay = filteredPurchases.reduce((acc: {date: string, isoDate: string, amount: number}[], purchase) => {
+  // Group purchases by day or hour depending on selection
+  const purchasesByDayOrHour = filteredPurchases.reduce((acc: {date: string, isoDate: string, amount: number}[], purchase) => {
     const date = new Date(purchase.createdAt);
-    const dateString = date.toLocaleDateString();
-    const isoDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
-    const existingDate = acc.find(item => item.date === dateString);
+    // Format differently based on single day or date range
+    const dateKey = isSingleDay 
+      ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+      : date.toLocaleDateString();
+      
+    const isoDateKey = isSingleDay
+      ? `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`
+      : date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    const existingDate = acc.find(item => item.date === dateKey);
     
     if (existingDate) {
       existingDate.amount += purchase.totalPrice;
     } else {
-      acc.push({ date: dateString, isoDate, amount: purchase.totalPrice });
+      acc.push({ date: dateKey, isoDate: isoDateKey, amount: purchase.totalPrice });
     }
     
     return acc;
   }, []);
   
-  // Group expenses by day
-  const expensesByDay = filteredExpenses
+  // Group expenses by day or hour depending on selection
+  const expensesByDayOrHour = filteredExpenses
     .filter(e => e.type === 'expense')
     .reduce((acc: {date: string, isoDate: string, amount: number}[], expense) => {
       const date = new Date(expense.createdAt);
-      const dateString = date.toLocaleDateString();
-      const isoDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
-      const existingDate = acc.find(item => item.date === dateString);
+      // Format differently based on single day or date range
+      const dateKey = isSingleDay 
+        ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+        : date.toLocaleDateString();
+        
+      const isoDateKey = isSingleDay
+        ? `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`
+        : date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      
+      const existingDate = acc.find(item => item.date === dateKey);
       
       if (existingDate) {
         existingDate.amount += expense.amount;
       } else {
-        acc.push({ date: dateString, isoDate, amount: expense.amount });
+        acc.push({ date: dateKey, isoDate: isoDateKey, amount: expense.amount });
       }
       
       return acc;
     }, []);
   
-  // Group incomes by day
-  const incomesByDay = filteredExpenses
+  // Group incomes by day or hour depending on selection
+  const incomesByDayOrHour = filteredExpenses
     .filter(e => e.type === 'income')
     .reduce((acc: {date: string, isoDate: string, amount: number}[], income) => {
       const date = new Date(income.createdAt);
-      const dateString = date.toLocaleDateString();
-      const isoDate = date.toISOString().split('T')[0]; // YYYY-MM-DD format
-      const existingDate = acc.find(item => item.date === dateString);
+      // Format differently based on single day or date range
+      const dateKey = isSingleDay 
+        ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+        : date.toLocaleDateString();
+        
+      const isoDateKey = isSingleDay
+        ? `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`
+        : date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      
+      const existingDate = acc.find(item => item.date === dateKey);
       
       if (existingDate) {
         existingDate.amount += income.amount;
       } else {
-        acc.push({ date: dateString, isoDate, amount: income.amount });
-    }
+        acc.push({ date: dateKey, isoDate: isoDateKey, amount: income.amount });
+      }
+      
+      return acc;
+    }, []);
+
+  // Sort the arrays by date/time
+  const sortByIsoDate = (a: {isoDate: string}, b: {isoDate: string}) => 
+    new Date(a.isoDate).getTime() - new Date(b.isoDate).getTime();
     
-    return acc;
-  }, []);
+  salesByDayOrHour.sort(sortByIsoDate);
+  purchasesByDayOrHour.sort(sortByIsoDate);
+  expensesByDayOrHour.sort(sortByIsoDate);
+  incomesByDayOrHour.sort(sortByIsoDate);
+  
+  // If single day and no hourly data points, create empty time slots for visualization
+  if (isSingleDay && salesByDayOrHour.length < 12) {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const hours = Array.from({ length: 24 }, (_, i) => i);
+    
+    hours.forEach(hour => {
+      const hourStr = hour.toString().padStart(2, '0');
+      const timeStr = `${hourStr}:00`;
+      const formattedTime = new Date(`2000-01-01T${hourStr}:00:00`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const isoDateStr = `${dateStr}T${hourStr}:00:00Z`;
+      
+      // Add empty data points for each series if they don't exist
+      if (!salesByDayOrHour.find(item => item.isoDate === isoDateStr)) {
+        salesByDayOrHour.push({ date: formattedTime, isoDate: isoDateStr, amount: 0 });
+      }
+      
+      if (!purchasesByDayOrHour.find(item => item.isoDate === isoDateStr)) {
+        purchasesByDayOrHour.push({ date: formattedTime, isoDate: isoDateStr, amount: 0 });
+      }
+      
+      if (!expensesByDayOrHour.find(item => item.isoDate === isoDateStr)) {
+        expensesByDayOrHour.push({ date: formattedTime, isoDate: isoDateStr, amount: 0 });
+      }
+      
+      if (!incomesByDayOrHour.find(item => item.isoDate === isoDateStr)) {
+        incomesByDayOrHour.push({ date: formattedTime, isoDate: isoDateStr, amount: 0 });
+      }
+    });
+    
+    // Re-sort after adding empty slots
+    salesByDayOrHour.sort(sortByIsoDate);
+    purchasesByDayOrHour.sort(sortByIsoDate);
+    expensesByDayOrHour.sort(sortByIsoDate);
+    incomesByDayOrHour.sort(sortByIsoDate);
+  }
   
   // Calculate sales by bank
   const salesByBank = [
@@ -431,68 +512,51 @@ export const statsDataAtom = atom<StatsData>((get) => {
     { bank: 'HDFC SS' as const, amount: calculateBankTotal(filteredSales, 'HDFC SS') },
   ];
   
-  // Calculate sales by platform
-  const salesByPlatform = [
-    { platform: 'BINANCE SS' as const, amount: calculatePlatformTotal(filteredSales, 'BINANCE SS') },
-    { platform: 'BINANCE AS' as const, amount: calculatePlatformTotal(filteredSales, 'BINANCE AS') },
-    { platform: 'BYBIT AS' as const, amount: calculatePlatformTotal(filteredSales, 'BYBIT AS') },
-    { platform: 'BITGET SS' as const, amount: calculatePlatformTotal(filteredSales, 'BITGET SS') },
-  ];
+  // Build dynamic bank list from banksAtom
+  const availableBanks = get(banksAtom);
+  let banksList = salesByBank;
   
-  // Calculate purchases by bank
-  const purchasesByBank = [
-    { bank: 'IDBI' as const, amount: calculateBankTotal(filteredPurchases, 'IDBI') },
-    { bank: 'CANARA SS' as const, amount: calculateBankTotal(filteredPurchases, 'CANARA SS') },
-    { bank: 'BOB SS' as const, amount: calculateBankTotal(filteredPurchases, 'BOB SS') },
-    { bank: 'PNB' as const, amount: calculateBankTotal(filteredPurchases, 'PNB') },
-    { bank: 'INDUSIND BLYNK' as const, amount: calculateBankTotal(filteredPurchases, 'INDUSIND BLYNK') },
-    { bank: 'HDFC SS' as const, amount: calculateBankTotal(filteredPurchases, 'HDFC SS') },
-  ];
-  
-  // Calculate purchases by platform
-  const purchasesByPlatform = [
-    { platform: 'BINANCE SS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BINANCE SS') },
-    { platform: 'BINANCE AS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BINANCE AS') },
-    { platform: 'BYBIT AS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BYBIT AS') },
-    { platform: 'BITGET SS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BITGET SS') },
-  ];
-  
-  // Calculate expenses by bank
-  const expensesByBank = [
-    { bank: 'IDBI' as const, amount: filteredExpenses.filter(e => e.bank === 'IDBI' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'CANARA SS' as const, amount: filteredExpenses.filter(e => e.bank === 'CANARA SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'BOB SS' as const, amount: filteredExpenses.filter(e => e.bank === 'BOB SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'PNB' as const, amount: filteredExpenses.filter(e => e.bank === 'PNB' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'INDUSIND BLYNK' as const, amount: filteredExpenses.filter(e => e.bank === 'INDUSIND BLYNK' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'HDFC SS' as const, amount: filteredExpenses.filter(e => e.bank === 'HDFC SS' && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) },
-  ];
-  
-  // Calculate incomes by bank
-  const incomesByBank = [
-    { bank: 'IDBI' as const, amount: filteredExpenses.filter(e => e.bank === 'IDBI' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'CANARA SS' as const, amount: filteredExpenses.filter(e => e.bank === 'CANARA SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'BOB SS' as const, amount: filteredExpenses.filter(e => e.bank === 'BOB SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'PNB' as const, amount: filteredExpenses.filter(e => e.bank === 'PNB' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'INDUSIND BLYNK' as const, amount: filteredExpenses.filter(e => e.bank === 'INDUSIND BLYNK' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
-    { bank: 'HDFC SS' as const, amount: filteredExpenses.filter(e => e.bank === 'HDFC SS' && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) },
-  ];
-  
-  // Cash distribution (from dashboard)
-  const dashboardData = get(dashboardDataAtom);
-  const cashDistribution = dashboardData.cashList;
+  if (availableBanks && availableBanks.length > 0) {
+    // Create entries for all active banks
+    banksList = availableBanks
+      .filter(bank => bank.isActive)
+      .map(bank => ({ 
+        bank: bank.name as Bank, 
+        amount: calculateBankTotal(filteredSales, bank.name as Bank) 
+      })) as typeof salesByBank;
+  }
   
   return {
-    salesByDay,
-    purchasesByDay,
-    expensesByDay,
-    incomesByDay,
-    salesByBank,
-    salesByPlatform,
-    purchasesByBank,
-    purchasesByPlatform,
-    expensesByBank,
-    incomesByBank,
-    cashDistribution,
+    salesByDay: salesByDayOrHour,
+    purchasesByDay: purchasesByDayOrHour,
+    expensesByDay: expensesByDayOrHour,
+    incomesByDay: incomesByDayOrHour,
+    salesByBank: banksList,
+    salesByPlatform: [
+      { platform: 'BINANCE SS' as const, amount: calculatePlatformTotal(filteredSales, 'BINANCE SS') },
+      { platform: 'BINANCE AS' as const, amount: calculatePlatformTotal(filteredSales, 'BINANCE AS') },
+      { platform: 'BYBIT AS' as const, amount: calculatePlatformTotal(filteredSales, 'BYBIT AS') },
+      { platform: 'BITGET SS' as const, amount: calculatePlatformTotal(filteredSales, 'BITGET SS') },
+    ],
+    purchasesByBank: banksList.map(bankItem => ({
+      bank: bankItem.bank,
+      amount: calculateBankTotal(filteredPurchases, bankItem.bank)
+    })),
+    purchasesByPlatform: [
+      { platform: 'BINANCE SS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BINANCE SS') },
+      { platform: 'BINANCE AS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BINANCE AS') },
+      { platform: 'BYBIT AS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BYBIT AS') },
+      { platform: 'BITGET SS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BITGET SS') },
+    ],
+    expensesByBank: banksList.map(bankItem => ({
+      bank: bankItem.bank,
+      amount: filteredExpenses.filter(e => e.bank === bankItem.bank && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
+    })),
+    incomesByBank: banksList.map(bankItem => ({
+      bank: bankItem.bank,
+      amount: filteredExpenses.filter(e => e.bank === bankItem.bank && e.type === 'income').reduce((sum, e) => sum + e.amount, 0)
+    })),
+    cashDistribution: get(dashboardDataAtom).cashList,
   };
 });
 
