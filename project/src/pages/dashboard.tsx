@@ -17,7 +17,9 @@ import {
   PieChart,
   Pie,
   Cell,
-  ComposedChart
+  ComposedChart,
+  AreaChart,
+  Area
 } from 'recharts';
 import { dashboardDataAtom, refreshDataAtom, statsDataAtom, settingsAtom, salesAtom, purchasesAtom, transfersAtom, updateStockBalanceAtom, updateCashBalanceAtom, banksAtom } from '../store/data';
 import DashboardCard from '../components/layout/dashboard-card';
@@ -45,7 +47,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import DateRangeFilter from '../components/date-range-filter';
-import { dateRangeAtom } from '../store/filters';
+import { dateRangeAtom, isSingleDaySelectionAtom, formatDateByRangeAtom } from '../store/filters';
 
 const Dashboard = () => {
   const [dashboardData] = useAtom(dashboardDataAtom);
@@ -395,6 +397,10 @@ const Dashboard = () => {
 
   // Add this to the component after the existing useAtom statements
   const [banks] = useAtom(banksAtom);
+
+  // Add this to your state hooks
+  const [isSingleDay] = useAtom(isSingleDaySelectionAtom);
+  const [formatDateByRange] = useAtom(formatDateByRangeAtom);
 
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
@@ -926,7 +932,13 @@ const Dashboard = () => {
                       style={{ fontSize: '0.75rem' }}
                     />
                     <YAxis 
-                      tickFormatter={(value) => `${value/1000}k`}
+                      tickFormatter={(value) => {
+                        // If single day view, show time format
+                        if (isSingleDay) {
+                          return value; // Value is already formatted as time in statsDataAtom
+                        }
+                        return value;
+                      }}
                       tickLine={false}
                       axisLine={{ stroke: '#e5e7eb' }}
                       style={{ fontSize: '0.75rem' }}
@@ -1177,8 +1189,8 @@ const Dashboard = () => {
                 value={newCashBalance}
                 onChange={(e) => setNewCashBalance(e.target.value)}
                 className="col-span-3"
-              />
-            </div>
+        />
+      </div>
           </div>
           
           <DialogFooter>

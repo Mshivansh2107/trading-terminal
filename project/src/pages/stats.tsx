@@ -21,12 +21,14 @@ import { statsDataAtom, dashboardDataAtom } from '../store/data';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { formatCurrency } from '../lib/utils';
 import DateRangeFilter from '../components/date-range-filter';
-import { dateRangeAtom } from '../store/filters';
+import { dateRangeAtom, isSingleDaySelectionAtom, formatDateByRangeAtom } from '../store/filters';
 
 const Stats = () => {
   const [statsData] = useAtom(statsDataAtom);
   const [dashboardData] = useAtom(dashboardDataAtom);
   const [dateRange] = useAtom(dateRangeAtom);
+  const [isSingleDay] = useAtom(isSingleDaySelectionAtom);
+  const [formatDateByRange] = useAtom(formatDateByRangeAtom);
   
   // Ensure stats update when date range changes
   useEffect(() => {
@@ -81,7 +83,7 @@ const Stats = () => {
           <CardContent>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={salesByDayData}>
+                <AreaChart data={statsData.salesByDay}>
                   <defs>
                     <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
@@ -89,7 +91,10 @@ const Stats = () => {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
+                  <XAxis 
+                    dataKey="date" 
+                    label={{ value: isSingleDay ? "Time" : "Date", position: "insideBottomRight", offset: -5 }}
+                  />
                   <YAxis />
                   <Tooltip formatter={(value) => formatCurrency(Number(value))} />
                   <Legend />
@@ -130,7 +135,10 @@ const Stats = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={marginData}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
+                  <XAxis 
+                    dataKey="date" 
+                    label={{ value: isSingleDay ? "Time" : "Date", position: "insideBottomRight", offset: -5 }}
+                  />
                   <YAxis />
                   <Tooltip formatter={(value) => `${value}%`} />
                   <Legend />
@@ -227,7 +235,10 @@ const Stats = () => {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={combinedData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
+                <XAxis 
+                  dataKey="date" 
+                  label={{ value: isSingleDay ? "Time" : "Date", position: "insideBottomRight", offset: -5 }}
+                />
                 <YAxis />
                 <Tooltip formatter={(value) => formatCurrency(Number(value))} />
                 <Legend />

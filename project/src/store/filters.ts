@@ -1,10 +1,11 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
-import { subMonths } from 'date-fns';
+import { subMonths, startOfDay, endOfDay, isSameDay, format, parseISO } from 'date-fns';
 
-// Default to last 3 months range
-const defaultStartDate = subMonths(new Date(), 3);
-const defaultEndDate = new Date();
+// Default to today's range rather than 3 months
+const today = new Date();
+const defaultStartDate = startOfDay(today);
+const defaultEndDate = endOfDay(today);
 
 // Create atoms for date range filtering - explicitly convert to string for storage
 export const dateRangeAtom = atomWithStorage('dateRangeFilter', {
@@ -19,22 +20,40 @@ export const isDateInRangeAtom = atom(
     const rangeData = get(dateRangeAtom);
     const { isActive } = rangeData;
     
-    // Convert ISO string dates back to Date objects
-    const startDate = new Date(rangeData.startDate);
-    const endDate = new Date(rangeData.endDate);
-    
     // If filtering is not active, always return true
     if (!isActive) return true;
+    
+    // Convert ISO string dates back to Date objects
+    const startDateObj = new Date(rangeData.startDate);
+    const endDateObj = new Date(rangeData.endDate);
+    
+    // Check if it's a single day selection
+    const isSingleDaySelection = isSameDay(startDateObj, endDateObj);
+    
+    // For single day selection, ensure we cover the entire day
+    const startDate = isSingleDaySelection ? startOfDay(startDateObj) : startDateObj;
+    const endDate = isSingleDaySelection ? endOfDay(endDateObj) : endDateObj;
     
     // Parse the date if it's a string
     const dateObj = typeof date === 'string' ? new Date(date) : date;
     
-    // Normalize dates to start/end of day for accurate comparison
-    const startTime = new Date(startDate).setHours(0, 0, 0, 0);
-    const endTime = new Date(endDate).setHours(23, 59, 59, 999);
+    // Get timestamps for comparison
+    const startTime = startDate.getTime();
+    const endTime = endDate.getTime();
     const dateTime = dateObj.getTime();
     
     return dateTime >= startTime && dateTime <= endTime;
+  }
+);
+
+// Helper to check if the current date range is a single day
+export const isSingleDaySelectionAtom = atom(
+  (get) => {
+    const rangeData = get(dateRangeAtom);
+    const startDate = parseISO(rangeData.startDate);
+    const endDate = parseISO(rangeData.endDate);
+    
+    return isSameDay(startDate, endDate);
   }
 );
 
@@ -55,6 +74,7 @@ export const dateRangeDisplayAtom = atom(
   (get) => {
     const rangeData = get(dateRangeAtom);
     const { isActive } = rangeData;
+    const isSingleDay = get(isSingleDaySelectionAtom);
     
     if (!isActive) return 'All Time';
     
@@ -62,14 +82,40 @@ export const dateRangeDisplayAtom = atom(
     const startDate = new Date(rangeData.startDate);
     const endDate = new Date(rangeData.endDate);
     
-    const formatDate = (date: Date) => {
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    };
+    // For a single day selection, only show that day
+    if (isSingleDay) {
+      return format(startDate, 'MMM d, yyyy');
+    }
     
-    return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+    // For a date range, show start and end dates
+    return `${format(startDate, 'MMM d, yyyy')} - ${format(endDate, 'MMM d, yyyy')}`;
+  }
+);
+
+// Get formatted time for single-day view
+export const formatTimeForSingleDayViewAtom = atom(
+  (get) => (date: Date | string) => {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    const isSingleDay = get(isSingleDaySelectionAtom);
+    
+    if (isSingleDay) {
+      return format(dateObj, 'h:mm a'); // Format as time only for single day
+    }
+    
+    return format(dateObj, 'MMM d'); // Format as date for multi-day ranges
+  }
+);
+
+// Helper to format date/time based on current range
+export const formatDateByRangeAtom = atom(
+  (get) => (date: Date | string) => {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    const isSingleDay = get(isSingleDaySelectionAtom);
+    
+    if (isSingleDay) {
+      return format(dateObj, 'h:mm a'); // Time only for single day
+    }
+    
+    return format(dateObj, 'MMM d'); // Date only for multi-day range
   }
 ); 
