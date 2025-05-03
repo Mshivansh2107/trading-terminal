@@ -258,6 +258,7 @@ function Transactions() {
                         <ArrowUpDown className="inline ml-1 h-4 w-4" />
                       )}
                     </TableHead>
+                    <TableHead className="whitespace-nowrap" style={{ minWidth: '180px' }}>Created By</TableHead>
                     <TableHead className="text-right whitespace-nowrap" style={{ minWidth: '120px' }}>Amount</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -273,6 +274,9 @@ function Transactions() {
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           {new Date(transaction.createdAt).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {transaction.createdBy || 'Unknown'}
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           {renderAmount(transaction)}

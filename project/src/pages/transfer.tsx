@@ -62,6 +62,7 @@ const Transfer = () => {
       from: fromPlatform as Platform,
       to: toPlatform as Platform,
       quantity: parseFloat(quantity),
+      createdBy: '' // The actual value will be set by the addTransferAtom
     };
     
     console.log('Adding new transfer:', newTransfer);
@@ -110,6 +111,11 @@ const Transfer = () => {
       key: 'createdAt', 
       label: 'Created At',
       formatter: (value: Date) => formatDateTime(new Date(value))
+    },
+    { 
+      key: 'createdBy', 
+      label: 'Created By',
+      formatter: (value: string) => value || '-'
     },
     { 
       key: 'editedBy', 

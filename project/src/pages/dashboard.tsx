@@ -34,7 +34,8 @@ import {
   DatabaseIcon,
   Download,
   Edit,
-  Plus
+  Plus,
+  Maximize2
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { authStateAtom } from '../store/supabaseAuth';
@@ -45,10 +46,11 @@ import { Transaction, BankEntity } from "../types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { CustomSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import DateRangeFilter from '../components/date-range-filter';
 import { dateRangeAtom, isSingleDaySelectionAtom, formatDateByRangeAtom } from '../store/filters';
 import { PlatformSelector } from '../components/ui/platform-selector';
+import { Legend } from 'recharts';
 
 const Dashboard = () => {
   const [dashboardData] = useAtom(dashboardDataAtom);
@@ -69,6 +71,7 @@ const Dashboard = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const tooltipTimeoutRef = useRef<NodeJS.Timeout>();
+  const [enlargedChart, setEnlargedChart] = useState<'stock' | 'cash' | null>(null);
 
   // Refs for chart containers
   const salesChartRef = useRef<HTMLDivElement>(null);
@@ -80,6 +83,10 @@ const Dashboard = () => {
   
   // Calculate margin status
   const marginStatus = dashboardData.currentMargin >= dashboardData.requiredMargin ? 'up' : 'down';
+
+  // Function to determine if we should display hourly view
+  // Only show hourly view when a single day is selected AND date filtering is active
+  const shouldShowHourlyView = dateRange.isActive && isSingleDay;
 
   // Handle data refresh
   const handleRefresh = async () => {
@@ -217,7 +224,14 @@ const Dashboard = () => {
 
   // Load data on first render
   useEffect(() => {
-    handleRefresh();
+    console.log("Dashboard loading - refreshing data...");
+    // Check if connected to Supabase
+    console.log("Current auth state:", authState);
+    
+    handleRefresh()
+      .then(() => console.log("Initial data load complete"))
+      .catch((error) => console.error("Error during initial data load:", error));
+    
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -233,7 +247,7 @@ const Dashboard = () => {
     .sort((a, b) => new Date(a.isoDate).getTime() - new Date(b.isoDate).getTime())
     .map(day => {
       let dateDisplay;
-      if (isSingleDay) {
+      if (shouldShowHourlyView) {
         // Extract just the hour:minute from the date string for hourly view
         const date = new Date(day.isoDate);
         dateDisplay = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -255,7 +269,7 @@ const Dashboard = () => {
 
   // If no data, provide empty array with last 14 days or 24 hours
   const defaultChartData = salesChartData.length > 0 ? salesChartData : 
-    isSingleDay ? 
+    shouldShowHourlyView ? 
       // Create 24 hourly slots for a single day
       Array.from({ length: 24 }).map((_, i) => {
         const hour = i.toString().padStart(2, '0');
@@ -279,7 +293,7 @@ const Dashboard = () => {
   // Update the code that creates hourly data points in statsDataAtom usage to ensure all 24 hours
   // Add this useEffect to sort and normalize salesChartData when it changes
   useEffect(() => {
-    if (isSingleDay && salesChartData.length > 0) {
+    if (shouldShowHourlyView && salesChartData.length > 0) {
       // Ensure we have data points for all 24 hours
       const fullDayData = Array.from({ length: 24 }).map((_, hour) => {
         const hourStr = hour.toString().padStart(2, '0');
@@ -311,7 +325,7 @@ const Dashboard = () => {
       // defaultChartData = fullDayData; // Can't reassign const
       // Instead, we'll use this data in the chart render
     }
-  }, [salesChartData, isSingleDay]);
+  }, [salesChartData, shouldShowHourlyView]);
 
   // Prepare data for pie charts with proper filtering and sorting
   const stockPieData = dashboardData.stockList
@@ -343,6 +357,7 @@ const Dashboard = () => {
     { label: "Name", key: "name" },
     { label: "Contact No", key: "contactNo" },
     { label: "Created At", key: "createdAt" },
+    { label: "Created By", key: "createdBy" },
     { label: "Edited By", key: "editedBy" },
     { label: "Updated At", key: "updatedAt" }
   ];
@@ -409,11 +424,15 @@ const Dashboard = () => {
   const handleStockUpdate = async () => {
     if (!selectedPlatform || isNaN(Number(newStockBalance))) {
       console.log("Invalid input");
+      alert("Please enter a valid platform and quantity");
       return;
     }
 
     try {
       console.log(`Attempting to update ${selectedPlatform} stock to ${newStockBalance}...`);
+      
+      // Show feedback to the user
+      alert(`Processing: Updating ${selectedPlatform} stock to ${newStockBalance}...`);
       
       await updateStockBalance({
         platform: selectedPlatform,
@@ -427,19 +446,27 @@ const Dashboard = () => {
       console.log("Refreshing data to verify update...");
       await handleRefresh();
       console.log("Data refresh complete");
+      
+      // Show success message
+      alert(`${selectedPlatform} stock has been successfully updated to ${newStockBalance}`);
     } catch (error) {
-      console.log("Failed to update stock balance:", error);
+      console.error("Failed to update stock balance:", error);
+      alert(`Error updating stock balance: ${error}`);
     }
   };
 
   const handleCashUpdate = async () => {
     if (!selectedBank || isNaN(Number(newCashBalance))) {
       console.log("Invalid input");
+      alert("Please enter a valid bank and amount");
       return;
     }
 
     try {
       console.log(`Attempting to update ${selectedBank} balance to ${newCashBalance}...`);
+      
+      // Show feedback to the user
+      alert(`Processing: Updating ${selectedBank} balance to ${newCashBalance}...`);
       
       await updateCashBalance({
         bank: selectedBank,
@@ -453,8 +480,12 @@ const Dashboard = () => {
       console.log("Refreshing data to verify update...");
       await handleRefresh();
       console.log("Data refresh complete");
+      
+      // Show success message
+      alert(`${selectedBank} balance has been successfully updated to ${newCashBalance}`);
     } catch (error) {
-      console.log("Failed to update cash balance:", error);
+      console.error("Failed to update cash balance:", error);
+      alert(`Error updating cash balance: ${error}`);
     }
   };
 
@@ -629,12 +660,12 @@ const Dashboard = () => {
                     <span className="text-green-500">●</span> Sales & Purchases
                   </div>
                   <div className="text-sm font-normal text-gray-500">
-                    {isSingleDay ? 'Hourly View' : 'Daily View'}
+                    {shouldShowHourlyView ? 'Hourly View' : 'Daily View'}
                   </div>
                 </CardTitle>
           </CardHeader>
           <CardContent>
-                <div className="h-64">
+                <div className="h-64" ref={salesChartRef}>
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={defaultChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -643,7 +674,7 @@ const Dashboard = () => {
                         tickLine={false}
                         axisLine={{ stroke: '#e5e7eb' }}
                         style={{ fontSize: '0.75rem' }}
-                        interval={isSingleDay ? 2 : 0}
+                        interval={shouldShowHourlyView ? 2 : 0}
                       />
                       <YAxis 
                         tickFormatter={(value) => `${value/1000}k`}
@@ -657,7 +688,7 @@ const Dashboard = () => {
                           name ? name.charAt(0).toUpperCase() + name.slice(1) : ''
                         ]}
                         labelFormatter={(label) => {
-                          if (isSingleDay) {
+                          if (shouldShowHourlyView) {
                             return `Today at ${label}`;
                           }
                           return label;
@@ -685,7 +716,7 @@ const Dashboard = () => {
                         isAnimationActive={false}
                         active={isCapturing ? true : undefined}
                       />
-                      {isSingleDay ? (
+                      {shouldShowHourlyView ? (
                         <>
                           <Bar 
                             dataKey="purchases" 
@@ -739,13 +770,23 @@ const Dashboard = () => {
                   <div className="flex items-center gap-2">
                     <span className="text-blue-500">●</span> Cash Distribution
                   </div>
-                  <div className="text-sm font-normal text-gray-500">
-                    By Bank
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-normal text-gray-500">
+                      By Bank
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => setEnlargedChart('cash')}
+                    >
+                      <Maximize2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-64">
+                <div className="h-64" ref={cashChartRef}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -756,10 +797,10 @@ const Dashboard = () => {
                         outerRadius={80}
                         paddingAngle={2}
                         dataKey="value"
-                        label={({ name, percent }) => 
-                          `${name} (${(percent * 100).toFixed(0)}%)`
-                        }
                         labelLine={false}
+                        label={({ name, percent }) => 
+                          percent > 0.05 ? `${name.slice(0, 10)}${name.length > 10 ? '...' : ''}` : ''
+                        }
                       >
                         {cashPieData.map((entry, index) => (
                           <Cell 
@@ -772,8 +813,16 @@ const Dashboard = () => {
                         formatter={(value, name: string) => [
                           formatCurrency(Number(value)), 
                           name ? name.charAt(0).toUpperCase() + name.slice(1) : ''
-                        ]} 
+                        ]}
+                        contentStyle={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '6px',
+                          padding: '8px 12px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                        }}
                       />
+                      <Legend layout="horizontal" verticalAlign="bottom" align="center" />
                     </PieChart>
                   </ResponsiveContainer>
             </div>
@@ -849,10 +898,20 @@ const Dashboard = () => {
             
             <Card className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader>
-                <CardTitle>Stock Distribution</CardTitle>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Stock Distribution</span>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setEnlargedChart('stock')}
+                  >
+                    <Maximize2 className="h-4 w-4" />
+                  </Button>
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-64">
+                <div className="h-64" ref={stockChartRef}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -864,15 +923,26 @@ const Dashboard = () => {
                         outerRadius={80}
                         innerRadius={40}
                         paddingAngle={1}
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        labelLine={false}
+                        label={({ name, percent }) => 
+                          percent > 0.05 ? `${name.slice(0, 10)}${name.length > 10 ? '...' : ''}` : ''
+                        }
                       >
-                        {stockPieData.map((_, index) => (
+                        {stockPieData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                         ))}
                       </Pie>
                       <Tooltip 
                         formatter={(value) => formatQuantity(Number(value))}
+                        contentStyle={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '6px',
+                          padding: '8px 12px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                        }}
                       />
+                      <Legend layout="horizontal" verticalAlign="bottom" align="center" />
                     </PieChart>
                   </ResponsiveContainer>
             </div>
@@ -901,8 +971,8 @@ const Dashboard = () => {
                   <Plus className="h-4 w-4" />
                   Add Cash Account
                 </Button>
-              </CardHeader>
-              <CardContent>
+          </CardHeader>
+          <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -945,24 +1015,35 @@ const Dashboard = () => {
         
             <Card className="shadow-sm hover:shadow-md transition-shadow">
           <CardHeader>
-                <CardTitle>Cash Distribution</CardTitle>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Cash Distribution</span>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setEnlargedChart('cash')}
+                  >
+                    <Maximize2 className="h-4 w-4" />
+                  </Button>
+                </CardTitle>
           </CardHeader>
           <CardContent>
-                <div className="h-64">
+                <div className="h-64" ref={cashChartRef}>
               <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={cashPieData}
+                        dataKey="value"
+                        nameKey="name"
                         cx="50%"
                         cy="50%"
                         innerRadius={60}
                         outerRadius={80}
                         paddingAngle={2}
-                        dataKey="value"
-                        label={({ name, percent }) => 
-                          `${name} (${(percent * 100).toFixed(0)}%)`
-                        }
                         labelLine={false}
+                        label={({ name, percent }) => 
+                          percent > 0.05 ? `${name.slice(0, 10)}${name.length > 10 ? '...' : ''}` : ''
+                        }
                       >
                         {cashPieData.map((entry, index) => (
                           <Cell 
@@ -975,8 +1056,16 @@ const Dashboard = () => {
                         formatter={(value, name: string) => [
                           formatCurrency(Number(value)), 
                           name ? name.charAt(0).toUpperCase() + name.slice(1) : ''
-                        ]} 
+                        ]}
+                        contentStyle={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '6px',
+                          padding: '8px 12px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                        }}
                       />
+                      <Legend layout="horizontal" verticalAlign="bottom" align="center" />
                     </PieChart>
               </ResponsiveContainer>
             </div>
@@ -985,369 +1074,153 @@ const Dashboard = () => {
       </div>
         </>
       )}
-      
-      {/* Charts section */}
-      {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                Sales & Purchases {isSingleDay ? 'Hourly' : 'Daily'} Trend
-                {isSingleDay && (
-                  <span className="ml-2 text-sm font-normal text-gray-500">
-                    (Showing hourly data for today)
-                  </span>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div ref={salesChartRef} className="h-80" id="sales-chart">
-                <ResponsiveContainer width="100%" height="100%">
-                  {isSingleDay ? (
-                    // For single day (hourly) view, use Area chart for better visualization
-                    <ComposedChart 
-                      data={defaultChartData}
-                      onMouseMove={(data) => {
-                        if (data && data.activeTooltipIndex !== undefined) {
-                          lastTooltipIndex.current = data.activeTooltipIndex;
-                        }
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis 
-                        dataKey="date" 
-                        tickLine={false}
-                        axisLine={{ stroke: '#e5e7eb' }}
-                        style={{ fontSize: '0.75rem' }}
-                        interval={isSingleDay ? 2 : 0}
-                      />
-                      <YAxis 
-                        tickFormatter={(value) => formatCurrency(value)}
-                        tickLine={false}
-                        axisLine={{ stroke: '#e5e7eb' }}
-                        style={{ fontSize: '0.75rem' }}
-                        domain={[0, 'auto']} // Start from 0 for better visualization
-                      />
-                      <Tooltip 
-                        formatter={(value, name: string) => [
-                          formatCurrency(Number(value)), 
-                          name ? name.charAt(0).toUpperCase() + name.slice(1) : ''
-                        ]}
-                        labelFormatter={(label) => `Today at ${label}`}
-                        contentStyle={{
-                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '6px',
-                          padding: '8px 12px',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                        }}
-                        itemStyle={{
-                          padding: '4px 0',
-                          color: '#374151'
-                        }}
-                        labelStyle={{
-                          marginBottom: '4px',
-                          fontWeight: 'bold',
-                          color: '#111827'
-                        }}
-                        cursor={{ strokeDasharray: '3 3' }}
-                        wrapperStyle={{
-                          outline: 'none'
-                        }}
-                        isAnimationActive={false}
-                        active={isCapturing ? true : undefined}
-                      />
-                      <Bar 
-                        dataKey="purchases" 
-                        fill="#3B82F6"
-                        radius={[4, 4, 0, 0]}
-                        barSize={20}
-                        name="Purchases"
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="sales"
-                        stroke="#10B981"
-                        fill="#10B98133"
-                        strokeWidth={2}
-                        dot={{ stroke: '#10B981', strokeWidth: 2, r: 4, fill: 'white' }}
-                        activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2, fill: '#10B981' }}
-                        name="Sales"
-                        isAnimationActive={false}
-                      />
-                    </ComposedChart>
-                  ) : (
-                    // For multi-day view, use standard ComposedChart
-                    <ComposedChart 
-                      data={salesChartData}
-                      onMouseMove={(data) => {
-                        if (data && data.activeTooltipIndex !== undefined) {
-                          lastTooltipIndex.current = data.activeTooltipIndex;
-                        }
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis 
-                        dataKey="date" 
-                        tickLine={false}
-                        axisLine={{ stroke: '#e5e7eb' }}
-                        style={{ fontSize: '0.75rem' }}
-                      />
-                      <YAxis 
-                        tickFormatter={(value) => formatCurrency(value)}
-                        tickLine={false}
-                        axisLine={{ stroke: '#e5e7eb' }}
-                        style={{ fontSize: '0.75rem' }}
-                        domain={[0, 'auto']} // Start from 0 for better visualization
-                      />
-                      <Tooltip 
-                        formatter={(value, name: string) => [
-                          formatCurrency(Number(value)), 
-                          name ? name.charAt(0).toUpperCase() + name.slice(1) : ''
-                        ]}
-                        labelFormatter={(label) => label}
-                        contentStyle={{
-                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '6px',
-                          padding: '8px 12px',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                        }}
-                        itemStyle={{
-                          padding: '4px 0',
-                          color: '#374151'
-                        }}
-                        labelStyle={{
-                          marginBottom: '4px',
-                          fontWeight: 'bold',
-                          color: '#111827'
-                        }}
-                        cursor={{ strokeDasharray: '3 3' }}
-                        wrapperStyle={{
-                          outline: 'none'
-                        }}
-                        isAnimationActive={false}
-                        active={isCapturing ? true : undefined}
-                      />
-                      <Bar 
-                        dataKey="purchases" 
-                        fill="#3B82F6"
-                        radius={[4, 4, 0, 0]}
-                        barSize={20}
-                        name="Purchases"
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="sales" 
-                        stroke="#10B981"
-                        strokeWidth={2}
-                        dot={{ stroke: '#10B981', strokeWidth: 2, r: 4, fill: 'white' }}
-                        activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2, fill: '#10B981' }}
-                        name="Sales"
-                        isAnimationActive={false}
-                      />
-                    </ComposedChart>
-                  )}
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>Stock Distribution</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div ref={stockChartRef} className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={stockPieData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      innerRadius={40}
-                      paddingAngle={1}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {stockPieData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      formatter={(value) => formatQuantity(Number(value))}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
-      {activeTab === 'cash' && (
-        <div className="grid grid-cols-1 gap-6 mb-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Cash Distribution</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div ref={cashChartRef} className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dashboardData.cashList}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="bank" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => formatCurrency(value as number)} />
-                    <Bar dataKey="amount" fill={colors[0]} name="Amount">
-                      {dashboardData.cashList.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      {/* Add the enlarged chart modal */}
+      {enlargedChart && (
+        <Dialog open={!!enlargedChart} onOpenChange={() => setEnlargedChart(null)}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>{enlargedChart === 'cash' ? 'Cash Distribution' : 'Stock Distribution'}</DialogTitle>
+            </DialogHeader>
+            <div className="h-[500px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={enlargedChart === 'cash' ? cashPieData : stockPieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={200}
+                    innerRadius={enlargedChart === 'cash' ? 140 : 100}
+                    paddingAngle={2}
+                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                  >
+                    {(enlargedChart === 'cash' ? cashPieData : stockPieData).map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={colors[index % colors.length]} 
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value, name: string) => 
+                      enlargedChart === 'cash' 
+                        ? [formatCurrency(Number(value)), name]
+                        : [formatQuantity(Number(value)), name]
+                    }
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    }}
+                  />
+                  <Legend layout="horizontal" verticalAlign="bottom" align="center" />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
-
-      {/* Settings Modal */}
-      <ErrorBoundary>
-        <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
-      </ErrorBoundary>
 
       {/* Stock Update Modal */}
       <Dialog open={stockUpdateOpen} onOpenChange={setStockUpdateOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Update Stock Balance</DialogTitle>
             <DialogDescription>
-              Enter the new stock quantity for the selected platform.
+              Set the new stock balance for {selectedPlatform || 'the selected platform'}.
             </DialogDescription>
           </DialogHeader>
-          
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="platform" className="text-right">
-                Platform
-              </Label>
-              <div className="col-span-3">
-                {selectedPlatform ? (
-                  <Input
-                    id="platform"
-                    value={selectedPlatform}
-                    disabled
-                  />
-                ) : (
+            {!selectedPlatform && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="platform" className="text-right">
+                  Platform
+                </Label>
+                <div className="col-span-3">
                   <PlatformSelector
                     value={selectedPlatform}
-                    onChange={setSelectedPlatform}
-                    placeholder="Select a platform"
-                    required
+                    onChange={(value) => setSelectedPlatform(value)}
                   />
-                )}
+                </div>
               </div>
-            </div>
+            )}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="quantity" className="text-right">
-                Quantity
+              <Label htmlFor="newBalance" className="text-right">
+                New Balance
               </Label>
               <Input
-                id="quantity"
-                type="number"
+                id="newBalance"
                 value={newStockBalance}
                 onChange={(e) => setNewStockBalance(e.target.value)}
                 className="col-span-3"
+                type="number"
+                step="0.00000001"
               />
             </div>
           </div>
-          
           <DialogFooter>
-            <Button variant="outline" onClick={() => setStockUpdateOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleStockUpdate}>
-              Update Stock
-            </Button>
+            <Button onClick={handleStockUpdate}>Update Balance</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
+
       {/* Cash Update Modal */}
       <Dialog open={cashUpdateOpen} onOpenChange={setCashUpdateOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Update Cash Balance</DialogTitle>
             <DialogDescription>
-              Enter the new cash amount for the selected bank account.
+              Set the new cash balance for {selectedBank || 'the selected bank'}.
             </DialogDescription>
           </DialogHeader>
-          
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="bank" className="text-right">
-                Bank
-              </Label>
-              <div className="col-span-3">
-                {selectedBank ? (
-                  <Input
-                    id="bank"
-                    value={selectedBank}
-                    disabled
-                  />
-                ) : (
-                  <select
-                    id="bank"
-                    value={selectedBank}
-                    onChange={(e) => setSelectedBank(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  >
-                    <option value="" disabled>Select bank</option>
-                    {/* Show existing cash banks first */}
-                    {dashboardData.cashList.map((cash) => (
-                      <option key={cash.bank} value={cash.bank}>
-                        {cash.bank}
-                      </option>
-                    ))}
-                    {/* Then show other available banks that aren't already in cashList */}
-                    {banks.map((bank) => 
-                      !dashboardData.cashList.some(cash => cash.bank === bank.name) && (
-                        <option key={bank.id} value={bank.name}>
+            {!selectedBank && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="bank" className="text-right">
+                  Bank
+                </Label>
+                <div className="col-span-3">
+                  <CustomSelect value={selectedBank} onValueChange={(value) => setSelectedBank(value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a bank" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {banks.map((bank) => (
+                        <SelectItem key={bank.name} value={bank.name}>
                           {bank.name}
-                        </option>
-                      )
-                    )}
-                  </select>
-                )}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </CustomSelect>
+                </div>
               </div>
-            </div>
+            )}
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="amount" className="text-right">
-                Amount
+              <Label htmlFor="newBalance" className="text-right">
+                New Balance
               </Label>
               <Input
-                id="amount"
-                type="number"
+                id="newBalance"
                 value={newCashBalance}
                 onChange={(e) => setNewCashBalance(e.target.value)}
                 className="col-span-3"
-              />
-            </div>
+                type="number"
+                step="0.01"
+        />
+      </div>
           </div>
-          
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCashUpdateOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleCashUpdate}>
-              Update Balance
-            </Button>
+            <Button onClick={handleCashUpdate}>Update Balance</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Settings Modal */}
+      <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 };
