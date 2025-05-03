@@ -9,6 +9,8 @@ import FormField from '../components/layout/form-field';
 import { PlusCircle, PencilIcon, TrashIcon } from 'lucide-react';
 import EditTransactionModal from '../components/edit-transaction-modal';
 import { SalesEntry, Bank, Platform, Currency } from '../types';
+import DateRangeFilter from '../components/date-range-filter';
+import { filterByDateAtom, dateRangeAtom } from '../store/filters';
 
 const Sales = () => {
   const [sales] = useAtom(salesAtom);
@@ -19,6 +21,8 @@ const Sales = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingSale, setEditingSale] = useState<SalesEntry | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [filterByDate] = useAtom(filterByDateAtom);
+  const [dateRange] = useAtom(dateRangeAtom);
   
   // Form state for calculations
   const [totalPrice, setTotalPrice] = useState<string>('');
@@ -202,17 +206,25 @@ const Sales = () => {
     { value: 'INR', label: 'INR' },
   ];
 
+  // Filter sales data by date range
+  const filteredSales = useMemo(() => {
+    return filterByDate(sales);
+  }, [filterByDate, sales, dateRange]);
+
   return (
     <div className="p-4 md:p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Sales Management</h1>
-        <Button 
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center"
-        >
-          <PlusCircle className="mr-2 h-4 w-4" />
-          {showForm ? 'Cancel' : 'New Sale'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <DateRangeFilter />
+          <Button 
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center"
+          >
+            <PlusCircle className="mr-2 h-4 w-4" />
+            {showForm ? 'Cancel' : 'New Sale'}
+          </Button>
+        </div>
       </div>
       
       {showForm && (
@@ -326,9 +338,9 @@ const Sales = () => {
         </Card>
       )}
       
-      <DataTable
-        data={sales}
-        columns={columns}
+      <DataTable 
+        data={filteredSales} 
+        columns={columns} 
         rowActions={rowActions}
         title="Sales List"
       />

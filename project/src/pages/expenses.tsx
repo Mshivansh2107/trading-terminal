@@ -11,6 +11,8 @@ import { formatCurrency, formatDate } from '../lib/utils';
 import { expensesAtom, addExpenseAtom, updateExpenseAtom, deleteExpenseAtom, banksAtom } from '../store/data';
 import { ExpenseEntry, Bank } from '../types';
 import DeleteConfirmationDialog from '../components/delete-confirmation-dialog';
+import DateRangeFilter from '../components/date-range-filter';
+import { filterByDateAtom, dateRangeAtom } from '../store/filters';
 
 // Constants for expense and income categories
 const EXPENSE_CATEGORIES = [
@@ -56,6 +58,8 @@ export default function Expenses() {
   const [banks] = useAtom(banksAtom);
   const [showForm, setShowForm] = useState(false);
   const [transactionType, setTransactionType] = useState<'expense' | 'income'>('expense');
+  const [filterByDate] = useAtom(filterByDateAtom);
+  const [dateRange] = useAtom(dateRangeAtom);
 
   // Dynamic banks from banksAtom
   const BANKS = useMemo(() => {
@@ -92,6 +96,20 @@ export default function Expenses() {
   // State for delete confirmation dialog
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
+
+  // Filter expenses data by date range
+  const filteredExpenses = useMemo(() => {
+    return filterByDate(expenses);
+  }, [filterByDate, expenses, dateRange]);
+
+  // Calculate total expenses and income from filtered data
+  const totalExpenses = filteredExpenses
+    .filter(expense => expense.type === 'expense')
+    .reduce((sum, expense) => sum + expense.amount, 0);
+
+  const totalIncome = filteredExpenses
+    .filter(expense => expense.type === 'income')
+    .reduce((sum, expense) => sum + expense.amount, 0);
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
@@ -153,15 +171,6 @@ export default function Expenses() {
       deleteExpense(expense.id);
     }
   }, [deleteExpense]);
-
-  // Calculate total expenses and income
-  const totalExpenses = expenses
-    .filter(expense => expense.type === 'expense')
-    .reduce((sum, expense) => sum + expense.amount, 0);
-
-  const totalIncome = expenses
-    .filter(expense => expense.type === 'income')
-    .reduce((sum, expense) => sum + expense.amount, 0);
 
   // Define columns for the data table
   const columns = useMemo(() => [
@@ -230,22 +239,29 @@ export default function Expenses() {
 
   return (
     <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold">Expenses & Income</h1>
-        <Button onClick={() => {
-          setShowForm(!showForm);
-          setIsEditing(false);
-          setFormData({
-            id: '',
-            bank: '' as Bank,
-            amount: '',
-            category: '',
-            description: '',
-          });
-        }}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          {showForm ? 'Cancel' : 'Add Transaction'}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <DateRangeFilter />
+          <Button 
+            onClick={() => {
+              setFormData({
+                id: '',
+                bank: '' as Bank,
+                amount: '',
+                category: '',
+                description: '',
+              });
+              setTransactionType('expense');
+              setShowForm(!showForm);
+              setIsEditing(false);
+            }}
+            className="flex items-center"
+          >
+            <PlusCircle className="mr-2 h-4 w-4" />
+            {showForm ? 'Cancel' : 'New Transaction'}
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -424,8 +440,8 @@ export default function Expenses() {
         <CardContent className="p-0">
           <DataTable
             columns={columns}
-            data={expenses}
-            title="Transactions"
+            data={filteredExpenses}
+            title="Transaction History"
             rowActions={rowActions}
           />
         </CardContent>

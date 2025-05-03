@@ -53,6 +53,7 @@ const Dashboard = () => {
   const [authState] = useAtom(authStateAtom);
   const [settings] = useAtom(settingsAtom);
   const [, refreshData] = useAtom(refreshDataAtom);
+  const [dateRange] = useAtom(dateRangeAtom);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'stock' | 'cash'>('overview');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -213,6 +214,13 @@ const Dashboard = () => {
     handleRefresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Refresh data when date range changes
+  useEffect(() => {
+    // Just accessing dashboardData and statsData is enough
+    // since they are reactive and will recalculate when dateRange changes
+    console.log("Date range changed, charts will update automatically");
+  }, [dateRange]);
 
   // Prepare sales data for chart with proper date formatting and sorting
   const salesChartData = statsData.salesByDay
@@ -384,9 +392,6 @@ const Dashboard = () => {
       console.log("Failed to update cash balance:", error);
     }
   };
-
-  // Add this line near the top of the Dashboard component where other state declarations are
-  const [dateRange] = useAtom(dateRangeAtom);
 
   // Add this to the component after the existing useAtom statements
   const [banks] = useAtom(banksAtom);

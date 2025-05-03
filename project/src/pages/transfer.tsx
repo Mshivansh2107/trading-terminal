@@ -9,6 +9,8 @@ import FormField from '../components/layout/form-field';
 import { PlusCircle, PencilIcon, TrashIcon } from 'lucide-react';
 import EditTransactionModal from '../components/edit-transaction-modal';
 import { TransferEntry, Platform } from '../types';
+import DateRangeFilter from '../components/date-range-filter';
+import { filterByDateAtom, dateRangeAtom } from '../store/filters';
 
 const Transfer = () => {
   const [transfers] = useAtom(transfersAtom);
@@ -18,6 +20,8 @@ const Transfer = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingTransfer, setEditingTransfer] = useState<TransferEntry | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [filterByDate] = useAtom(filterByDateAtom);
+  const [dateRange] = useAtom(dateRangeAtom);
   
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -141,17 +145,25 @@ const Transfer = () => {
       .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
   }, [transfers, platforms]);
 
+  // Filter transfers data by date range
+  const filteredTransfers = useMemo(() => {
+    return filterByDate(transfers);
+  }, [filterByDate, transfers, dateRange]);
+
   return (
     <div className="p-4 md:p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Transfer Management</h1>
-        <Button 
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center"
-        >
-          <PlusCircle className="mr-2 h-4 w-4" />
-          {showForm ? 'Cancel' : 'New Transfer'}
-        </Button>
+        <h1 className="text-2xl font-bold">Transfers</h1>
+        <div className="flex items-center gap-2">
+          <DateRangeFilter />
+          <Button 
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center"
+          >
+            <PlusCircle className="mr-2 h-4 w-4" />
+            {showForm ? 'Cancel' : 'New Transfer'}
+          </Button>
+        </div>
       </div>
       
       {showForm && (
@@ -212,9 +224,9 @@ const Transfer = () => {
         <div className="lg:col-span-2 bg-white rounded-lg shadow">
           <div className="p-4">
             <DataTable 
-              data={transfers} 
+              data={filteredTransfers} 
               columns={columns} 
-              title="Transfer Transactions"
+              title="Transfer History"
               csvFilename="transfers-data.csv"
               rowActions={rowActions}
             />
