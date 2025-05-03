@@ -1,5 +1,6 @@
 import React, { useEffect, useTransition } from 'react';
 import { useAtom } from 'jotai';
+import { Link } from 'react-router-dom';
 import { 
   settingsAtom, 
   syncSettingsAtom, 
@@ -17,7 +18,7 @@ import {
 import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Building2, LayoutGrid } from 'lucide-react';
 
 interface SettingsModalProps {
   open: boolean;
@@ -177,6 +178,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onOpenChange }) => 
             <p className="text-xs text-gray-500 col-span-4 text-right">
               Set to 0 to use automatic calculation
             </p>
+          </div>
+        </div>
+        
+        {/* Add management links */}
+        <div className="grid gap-4 py-2 border-t pt-4">
+          <h4 className="text-sm font-medium mb-1">Management Options</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <Button asChild variant="outline" className="w-full">
+              <Link to="/banks" className="flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                <span>Bank Management</span>
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full">
+              <Link to="/platforms" className="flex items-center gap-2">
+                <LayoutGrid className="h-4 w-4" />
+                <span>Platform Management</span>
+              </Link>
+            </Button>
           </div>
         </div>
         

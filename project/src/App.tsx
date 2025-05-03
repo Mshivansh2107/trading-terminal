@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAtom } from 'jotai';
 import { authStateAtom, initSupabaseSessionAtom } from './store/supabaseAuth';
-import { refreshDataAtom, syncSettingsAtom, autoFetchUsdPriceAtom, fetchBanksAtom } from './store/data';
+import { refreshDataAtom, syncSettingsAtom, autoFetchUsdPriceAtom, fetchBanksAtom, fetchPlatformsAtom } from './store/data';
 import { ToastProvider } from './components/ui/toast';
 
 // Pages
@@ -13,6 +13,7 @@ import Transfer from './pages/transfer';
 import BankTransfer from './pages/bank-transfer';
 import Expenses from './pages/expenses';
 import Banks from './pages/banks';
+import Platforms from './pages/platforms';
 import Stats from './pages/stats';
 import Login from './pages/login';
 import Register from './pages/register';
@@ -59,6 +60,7 @@ function App() {
   const [, syncSettings] = useAtom(syncSettingsAtom);
   const [, autoFetchPrice] = useAtom(autoFetchUsdPriceAtom);
   const [, fetchBanks] = useAtom(fetchBanksAtom);
+  const [, fetchPlatforms] = useAtom(fetchPlatformsAtom);
   
   useEffect(() => {
     // Initialize auth state from Supabase on app load
@@ -72,7 +74,8 @@ function App() {
         refreshData(),
         syncSettings(),
         autoFetchPrice(),
-        fetchBanks()
+        fetchBanks(),
+        fetchPlatforms()
       ]).catch(err => console.error('Error initializing data:', err));
       
       // Set up auto-fetch interval for USD price
@@ -82,7 +85,7 @@ function App() {
       
       return () => clearInterval(interval);
     }
-  }, [authState.isAuthenticated, refreshData, syncSettings, autoFetchPrice, fetchBanks]);
+  }, [authState.isAuthenticated, refreshData, syncSettings, autoFetchPrice, fetchBanks, fetchPlatforms]);
   
   return (
     <Router>
@@ -137,6 +140,12 @@ function App() {
               <Route path="/banks" element={
                 <ProtectedRoute>
                   <Banks />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/platforms" element={
+                <ProtectedRoute>
+                  <Platforms />
                 </ProtectedRoute>
               } />
               

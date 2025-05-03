@@ -6,7 +6,7 @@ import { ChevronDown } from "lucide-react";
 export interface SelectProps
   extends React.SelectHTMLAttributes<HTMLSelectElement> {}
 
-const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
+const BasicSelect = React.forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, children, ...props }, ref) => {
     return (
       <select
@@ -22,32 +22,49 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     );
   }
 );
-Select.displayName = "Select";
+BasicSelect.displayName = "BasicSelect";
 
 // Custom SelectContext for our enhanced select UI
 type SelectContextValue = {
   value?: string;
   onValueChange?: (value: string) => void;
+  open: boolean;
+  setOpen: React.Dispatch<React.SetStateAction<boolean>>;
 };
 
-const SelectContext = React.createContext<SelectContextValue>({});
+const SelectContext = React.createContext<SelectContextValue>({
+  open: false,
+  setOpen: () => {}
+});
 
 // Custom Select Root
 interface CustomSelectProps {
   children: React.ReactNode;
   value?: string;
   onValueChange?: (value: string) => void;
+  disabled?: boolean;
+  required?: boolean;
 }
 
-const CustomSelect: React.FC<CustomSelectProps> = ({ 
+const Select: React.FC<CustomSelectProps> = ({ 
   children, 
   value, 
-  onValueChange 
+  onValueChange,
+  disabled = false,
+  required = false
 }) => {
   const [open, setOpen] = React.useState(false);
 
+  // Handle value change
+  const handleValueChange = React.useCallback((newValue: string) => {
+    if (onValueChange) {
+      onValueChange(newValue);
+      setOpen(false); // Close the dropdown after selection
+    }
+  }, [onValueChange]);
+
   return (
-    <SelectContext.Provider value={{ value, onValueChange }}>
+    <SelectContext.Provider value={{ value, onValueChange: handleValueChange, open, setOpen }}>
       <div className="relative w-full">
         {children}
         {open && (
@@ -71,7 +88,7 @@ const SelectTrigger: React.FC<SelectTriggerProps> = ({
   children,
   className,
 }) => {
-  const [open, setOpen] = React.useState(false);
+  const { open, setOpen } = React.useContext(SelectContext);
   
   return (
     <button
@@ -117,12 +134,24 @@ const SelectContent: React.FC<SelectContentProps> = ({
   children,
   className,
 }) => {
+  const { open } = React.useContext(SelectContext);
+  
+  if (!open) return null;
+  
   return (
     <div className={cn(
-      "relative z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-80",
+      "fixed z-[9999] min-w-[8rem] overflow-hidden rounded-md border bg-white shadow-lg",
       className
-    )}>
-      <div className="max-h-[var(--radix-select-content-available-height)] overflow-auto p-1">
+    )}
+    style={{
+      position: 'absolute',
+      top: 'calc(100% + 4px)',
+      left: 0,
+      width: '100%',
+      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+    }}
+    >
+      <div className="max-h-[200px] overflow-auto p-1">
         {children}
       </div>
     </div>
@@ -154,8 +183,8 @@ const SelectItem: React.FC<SelectItemProps> = ({
   return (
     <div
       className={cn(
-        "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-        isSelected ? "bg-accent text-accent-foreground" : "hover:bg-accent hover:text-accent-foreground",
+        "relative flex w-full cursor-pointer select-none items-center rounded-sm py-2 px-3 text-sm font-medium hover:bg-gray-100",
+        isSelected ? "bg-blue-100 text-blue-800" : "text-gray-800",
         className
       )}
       onClick={handleClick}
@@ -166,8 +195,8 @@ const SelectItem: React.FC<SelectItemProps> = ({
 };
 
 export {
-  Select,
-  CustomSelect as Select2,
+  BasicSelect as Select,
+  Select as CustomSelect,
   SelectTrigger,
   SelectValue,
   SelectContent,

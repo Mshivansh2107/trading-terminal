@@ -8,9 +8,17 @@ import {
   DialogFooter,
 } from './ui/dialog';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { format } from 'date-fns';
 import FormField from './layout/form-field';
 import { formatDateTime } from '../lib/utils';
 import { Bank, Platform } from '../types';
+import { useAtom } from 'jotai';
+import { platformsAtom, banksAtom, fetchPlatformsAtom, fetchBanksAtom } from '../store/data';
+import { PlatformSelector } from './ui/platform-selector';
+import { BankSelector } from './ui/bank-selector';
 
 interface Option {
   value: string;
@@ -32,81 +40,122 @@ interface EditTransactionModalProps {
   incomeCategories?: Option[];
 }
 
-// Custom FormField component that handles value and onChange separately
-const CustomFormField: React.FC<{
-  label: string;
-  name: string;
-  type?: string;
-  required?: boolean;
-  options?: Option[];
-  inputProps?: any;
-  value: string | number;
-  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
-}> = ({ 
-  label, 
-  name, 
-  type = 'text', 
-  required = false,
-  options,
-  inputProps,
-  value,
-  onChange 
-}) => {
-  // Create a ref to hold the input element
-  const inputRef = React.useRef<HTMLInputElement | HTMLSelectElement>(null);
-  
-  // Update the value of the input when our value prop changes
-  React.useEffect(() => {
-    if (inputRef.current) {
-      // For select elements, we can't just set value
-      if (inputRef.current.tagName.toLowerCase() === 'select') {
-        const selectElement = inputRef.current as HTMLSelectElement;
-        selectElement.value = value?.toString() || '';
-      } else {
-        const inputElement = inputRef.current as HTMLInputElement;
-        inputElement.value = value?.toString() || '';
-      }
-    }
-  }, [value]);
-  
-  return (
-    <FormField
-      label={label}
-      name={name}
-      type={type}
-      required={required}
-      options={options}
-      inputProps={{
-        ...inputProps,
-        ref: inputRef,
-        onChange: onChange,
-        defaultValue: value
-      }}
-    />
-  );
-};
-
 const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
   open,
   onOpenChange,
   onSave,
   data,
   type,
-  platforms = [],
-  banks = [],
-  accounts = [],
-  expenseCategories = [],
-  incomeCategories = []
+  platforms: providedPlatforms,
+  banks: providedBanks,
+  accounts,
+  expenseCategories,
+  incomeCategories
 }) => {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [isManualQuantity, setIsManualQuantity] = useState(true);
   
+  // Get platforms and banks from store
+  const [platformsData] = useAtom(platformsAtom);
+  const [banksData] = useAtom(banksAtom);
+  const [, fetchPlatforms] = useAtom(fetchPlatformsAtom);
+  const [, fetchBanks] = useAtom(fetchBanksAtom);
+  
+  // Load platforms and banks when modal opens
+  useEffect(() => {
+    if (open) {
+      console.log('EditTransactionModal opened, loading data...');
+      
+      // Fetch platforms and banks data
+      Promise.all([
+        fetchPlatforms(),
+        fetchBanks()
+      ]).then(() => {
+        console.log('Platforms and banks loaded successfully');
+        console.log('Available platforms:', platformsData);
+        console.log('Available banks:', banksData);
+      }).catch(error => {
+        console.error('Error loading data:', error);
+      });
+    }
+  }, [open, fetchPlatforms, fetchBanks]);
+
+  // Generate platform options
+  const platformOptions = React.useMemo(() => {
+    // Use provided platforms if available
+    if (providedPlatforms && providedPlatforms.length > 0) {
+      return providedPlatforms;
+    }
+    
+    // Otherwise use platforms from store
+    if (platformsData && platformsData.length > 0) {
+      return platformsData
+        .filter(platform => platform.isActive)
+        .map(platform => ({
+          value: platform.name,
+          label: platform.name
+        }));
+    }
+    
+    // Fallback options
+    return [
+      { value: 'BINANCE SS', label: 'BINANCE SS' },
+      { value: 'BINANCE AS', label: 'BINANCE AS' },
+      { value: 'BYBIT SS', label: 'BYBIT SS' },
+      { value: 'BYBIT AS', label: 'BYBIT AS' },
+      { value: 'BITGET SS', label: 'BITGET SS' },
+      { value: 'BITGET AS', label: 'BITGET AS' },
+      { value: 'KUCOIN SS', label: 'KUCOIN SS' },
+      { value: 'KUCOIN AS', label: 'KUCOIN AS' },
+    ];
+  }, [providedPlatforms, platformsData]);
+  
+  // Generate bank options
+  const bankOptions = React.useMemo(() => {
+    // Use provided banks if available
+    if (providedBanks && providedBanks.length > 0) {
+      return providedBanks;
+    }
+    
+    // Otherwise use banks from store
+    if (banksData && banksData.length > 0) {
+      return banksData
+        .filter(bank => bank.isActive)
+        .map(bank => ({
+          value: bank.name,
+          label: bank.name
+        }));
+    }
+    
+    // Fallback options
+    return [
+      { value: 'IDBI', label: 'IDBI' },
+      { value: 'INDUSIND SS', label: 'INDUSIND SS' },
+      { value: 'HDFC CAA SS', label: 'HDFC CAA SS' },
+      { value: 'BOB SS', label: 'BOB SS' },
+      { value: 'CANARA SS', label: 'CANARA SS' },
+      { value: 'HDFC SS', label: 'HDFC SS' },
+      { value: 'INDUSIND BLYNK', label: 'INDUSIND BLYNK' },
+      { value: 'PNB', label: 'PNB' },
+    ];
+  }, [providedBanks, banksData]);
+  
   // Initialize form data when modal opens or data changes
   useEffect(() => {
     if (data) {
-      setFormData({ ...data });
+      // For transfer type, ensure from and to are proper strings
+      if (type === 'transfer') {
+        setFormData({
+          ...data,
+          from: data.from || '',
+          to: data.to || '',
+          quantity: data.quantity || ''
+        });
+      } else {
+        setFormData({ ...data });
+      }
     }
-  }, [data, open]);
+  }, [data, open, type]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -148,43 +197,63 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
         return (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <CustomFormField
+              <FormField
                 label="Order Number"
                 name="orderNumber"
                 required
-                value={formData.orderNumber}
-                onChange={handleChange}
+                inputProps={{
+                  value: formData.orderNumber,
+                  onChange: handleChange
+                }}
               />
               
-              <CustomFormField
-                label="Bank"
-                name="bank"
-                type="select"
-                required
-                options={banks}
-                value={formData.bank as Bank}
-                onChange={handleChange}
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Bank
+                  <span className="text-red-500 ml-1">*</span>
+                </label>
+                <BankSelector
+                  value={formData.bank || ''}
+                  onChange={(value) => {
+                    setFormData({
+                      ...formData,
+                      bank: value
+                    });
+                  }}
+                  placeholder="Select bank"
+                  required
+                />
+              </div>
               
-              <CustomFormField
-                label="Platform"
-                name="platform"
-                type="select"
-                required
-                options={platforms}
-                value={formData.platform as Platform}
-                onChange={handleChange}
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Platform
+                  <span className="text-red-500 ml-1">*</span>
+                </label>
+                <PlatformSelector
+                  value={formData.platform || ''}
+                  onChange={(value) => {
+                    setFormData({
+                      ...formData,
+                      platform: value
+                    });
+                  }}
+                  placeholder="Select platform"
+                  required
+                />
+              </div>
 
-              <CustomFormField
+              <FormField
                 label="Asset Type"
                 name="assetType"
                 required
-                value={formData.assetType}
-                onChange={handleChange}
+                inputProps={{
+                  value: formData.assetType,
+                  onChange: handleChange
+                }}
               />
               
-              <CustomFormField
+              <FormField
                 label="Fiat Type"
                 name="fiatType"
                 type="select"
@@ -193,11 +262,13 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                   { value: 'USDT', label: 'USDT' },
                   { value: 'INR', label: 'INR' }
                 ]}
-                value={formData.fiatType}
-                onChange={handleChange}
+                inputProps={{
+                  value: formData.fiatType,
+                  onChange: handleChange
+                }}
               />
 
-              <CustomFormField
+              <FormField
                 label="Total Price"
                 name="totalPrice" 
                 type="number"
@@ -205,12 +276,12 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 inputProps={{ 
                   step: "0.01",
                   min: "0",
+                  value: formData.totalPrice,
+                  onChange: handleChange
                 }}
-                value={formData.totalPrice}
-                onChange={handleChange}
               />
               
-              <CustomFormField
+              <FormField
                 label="Price"
                 name="price" 
                 type="number"
@@ -218,12 +289,12 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 inputProps={{ 
                   step: "0.01",
                   min: "0",
+                  value: formData.price,
+                  onChange: handleChange
                 }}
-                value={formData.price}
-                onChange={handleChange}
               />
               
-              <CustomFormField
+              <FormField
                 label="Quantity"
                 name="quantity" 
                 type="number"
@@ -231,27 +302,29 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 inputProps={{ 
                   step: "0.00000001",
                   min: "0",
+                  value: formData.quantity,
+                  onChange: handleChange
                 }}
-                value={formData.quantity}
-                onChange={handleChange}
               />
               
-              <CustomFormField
+              <FormField
                 label="Name"
                 name="name"
                 required
-                value={formData.name}
-                onChange={handleChange}
+                inputProps={{
+                  value: formData.name,
+                  onChange: handleChange
+                }}
               />
               
-              <CustomFormField
+              <FormField
                 label="Contact No."
                 name="contactNo"
                 inputProps={{ 
-                  placeholder: "Enter Contact Number (Optional)"
+                  placeholder: "Enter Contact Number (Optional)",
+                  value: formData.contactNo || '',
+                  onChange: handleChange
                 }}
-                value={formData.contactNo || ''}
-                onChange={handleChange}
               />
             </div>
           </>
@@ -261,27 +334,43 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
         return (
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <CustomFormField
-                label="From Platform"
-                name="from"
-                type="select"
-                required
-                options={platforms}
-                value={formData.from || ''}
-                onChange={handleChange}
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  From Platform
+                </label>
+                <PlatformSelector
+                  value={formData.from || ''}
+                  onChange={(value) => {
+                    console.log('From platform selected:', value);
+                    setFormData((prevData) => ({
+                      ...prevData,
+                      from: value
+                    }));
+                  }}
+                  placeholder="Select from platform"
+                  required
+                />
+              </div>
               
-              <CustomFormField
-                label="To Platform"
-                name="to"
-                type="select" 
-                required
-                options={platforms}
-                value={formData.to || ''}
-                onChange={handleChange}
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  To Platform
+                </label>
+                <PlatformSelector
+                  value={formData.to || ''}
+                  onChange={(value) => {
+                    console.log('To platform selected:', value);
+                    setFormData((prevData) => ({
+                      ...prevData,
+                      to: value
+                    }));
+                  }}
+                  placeholder="Select to platform" 
+                  required
+                />
+              </div>
               
-              <CustomFormField
+              <FormField
                 label="Quantity"
                 name="quantity" 
                 type="number"
@@ -289,9 +378,9 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 inputProps={{ 
                   step: "0.00000001",
                   min: "0",
+                  value: formData.quantity || '',
+                  onChange: handleChange
                 }}
-                value={formData.quantity || ''}
-                onChange={handleChange}
               />
             </div>
           </>
@@ -301,47 +390,67 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
         return (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <CustomFormField
-                label="From Bank"
-                name="fromBank"
-                type="select"
-                required
-                options={banks}
-                value={formData.fromBank || ''}
-                onChange={handleChange}
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  From Bank
+                  <span className="text-red-500 ml-1">*</span>
+                </label>
+                <BankSelector
+                  value={formData.fromBank || ''}
+                  onChange={(value) => {
+                    setFormData({
+                      ...formData,
+                      fromBank: value
+                    });
+                  }}
+                  placeholder="Select from bank"
+                  required
+                />
+              </div>
               
-              <CustomFormField
+              <FormField
                 label="From Account"
                 name="fromAccount"
                 type="select"
                 required
                 options={accounts}
-                value={formData.fromAccount || ''}
-                onChange={handleChange}
+                inputProps={{
+                  value: formData.fromAccount || '',
+                  onChange: handleChange
+                }}
               />
               
-              <CustomFormField
-                label="To Bank"
-                name="toBank"
-                type="select"
-                required
-                options={banks}
-                value={formData.toBank || ''}
-                onChange={handleChange}
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  To Bank
+                  <span className="text-red-500 ml-1">*</span>
+                </label>
+                <BankSelector
+                  value={formData.toBank || ''}
+                  onChange={(value) => {
+                    setFormData({
+                      ...formData,
+                      toBank: value
+                    });
+                  }}
+                  placeholder="Select to bank"
+                  required
+                />
+              </div>
               
-              <CustomFormField
+              <FormField
                 label="To Account"
                 name="toAccount"
                 type="select"
                 required
                 options={accounts}
-                value={formData.toAccount || ''}
-                onChange={handleChange}
+                inputProps={{
+                  value: formData.toAccount || '',
+                  onChange: handleChange
+                }}
               />
               
-              <CustomFormField
+              <FormField
                 label="Amount"
                 name="amount" 
                 type="number"
@@ -349,19 +458,19 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 inputProps={{ 
                   step: "0.01",
                   min: "0",
+                  value: formData.amount || '',
+                  onChange: handleChange
                 }}
-                value={formData.amount || ''}
-                onChange={handleChange}
               />
               
-              <CustomFormField
+              <FormField
                 label="Reference"
                 name="reference" 
                 inputProps={{ 
-                  placeholder: "Enter Reference (Optional)"
+                  placeholder: "Enter Reference (Optional)",
+                  value: formData.reference || '',
+                  onChange: handleChange
                 }}
-                value={formData.reference || ''}
-                onChange={handleChange}
               />
             </div>
           </>
@@ -393,17 +502,25 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <CustomFormField
-                label="Bank"
-                name="bank"
-                type="select"
-                required
-                options={banks}
-                value={formData.bank || ''}
-                onChange={handleChange}
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Bank
+                  <span className="text-red-500 ml-1">*</span>
+                </label>
+                <BankSelector
+                  value={formData.bank || ''}
+                  onChange={(value) => {
+                    setFormData({
+                      ...formData,
+                      bank: value
+                    });
+                  }}
+                  placeholder="Select bank"
+                  required
+                />
+              </div>
               
-              <CustomFormField
+              <FormField
                 label="Amount"
                 name="amount" 
                 type="number"
@@ -411,29 +528,31 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 inputProps={{ 
                   step: "0.01",
                   min: "0",
+                  value: formData.amount || '',
+                  onChange: handleChange
                 }}
-                value={formData.amount || ''}
-                onChange={handleChange}
               />
               
-              <CustomFormField
+              <FormField
                 label="Category"
                 name="category"
                 type="select"
                 required
                 options={categories}
-                value={formData.category || ''}
-                onChange={handleChange}
+                inputProps={{
+                  value: formData.category || '',
+                  onChange: handleChange
+                }}
               />
               
-              <CustomFormField
+              <FormField
                 label="Description"
                 name="description"
                 inputProps={{ 
-                  placeholder: "Enter Description (Optional)"
+                  placeholder: "Enter Description (Optional)",
+                  value: formData.description || '',
+                  onChange: handleChange
                 }}
-                value={formData.description || ''}
-                onChange={handleChange}
               />
             </div>
           </>

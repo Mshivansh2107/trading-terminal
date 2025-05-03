@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAtom } from 'jotai';
 import { banksAtom } from '../../store/data';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
+import { CustomSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
 
 interface BankSelectorProps {
   value: string;
@@ -21,6 +21,9 @@ export function BankSelector({
   className = ""
 }: BankSelectorProps) {
   const [banks] = useAtom(banksAtom);
+  
+  // Ensure we have a string value
+  const safeValue = value || '';
 
   // Fallback banks to use if no banks are in the store
   const fallbackBanks = [
@@ -38,11 +41,27 @@ export function BankSelector({
   const bankOptions = banks.length > 0 
     ? banks.filter(bank => bank.isActive) 
     : fallbackBanks;
+    
+  // Handle value change with safety checks
+  const handleValueChange = (newValue: string) => {
+    if (newValue && onChange) {
+      onChange(newValue);
+    }
+  };
+
+  // Check if the current value exists in the options
+  const valueExists = bankOptions.some(bank => bank.name === safeValue);
+  
+  // Log current state for debugging
+  React.useEffect(() => {
+    console.log('Bank Options:', bankOptions);
+    console.log('Current Bank Value:', safeValue);
+  }, [bankOptions, safeValue]);
 
   return (
-    <Select
-      value={value}
-      onValueChange={onChange}
+    <CustomSelect
+      value={valueExists ? safeValue : ''}
+      onValueChange={handleValueChange}
       disabled={disabled}
       required={required}
     >
@@ -50,12 +69,16 @@ export function BankSelector({
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
-        {bankOptions.map((bank) => (
-          <SelectItem key={bank.id} value={bank.name}>
-            {bank.name}
-          </SelectItem>
-        ))}
+        {bankOptions.length > 0 ? (
+          bankOptions.map((bank) => (
+            <SelectItem key={bank.id} value={bank.name}>
+              {bank.name}
+            </SelectItem>
+          ))
+        ) : (
+          <div className="p-2 text-sm text-red-500">No banks available. Please add banks first.</div>
+        )}
       </SelectContent>
-    </Select>
+    </CustomSelect>
   );
 } 
