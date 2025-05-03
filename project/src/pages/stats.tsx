@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAtom } from 'jotai';
 import { 
   BarChart, 
@@ -20,10 +20,20 @@ import {
 import { statsDataAtom, dashboardDataAtom } from '../store/data';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { formatCurrency } from '../lib/utils';
+import DateRangeFilter from '../components/date-range-filter';
+import { dateRangeAtom } from '../store/filters';
 
 const Stats = () => {
   const [statsData] = useAtom(statsDataAtom);
   const [dashboardData] = useAtom(dashboardDataAtom);
+  const [dateRange] = useAtom(dateRangeAtom);
+  
+  // Ensure stats update when date range changes
+  useEffect(() => {
+    // statsData and dashboardData are reactive and will recalculate
+    // automatically when dateRange changes
+    console.log("Date range updated, stats will refresh automatically");
+  }, [dateRange]);
   
   // Generate pie chart colors
   const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
@@ -57,7 +67,10 @@ const Stats = () => {
 
   return (
     <div className="p-4 md:p-6">
-      <h1 className="text-2xl font-bold mb-6">Statistics Dashboard</h1>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <h1 className="text-2xl font-bold">Statistics Dashboard</h1>
+        <DateRangeFilter />
+      </div>
       
       {/* Sales & Purchases Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">

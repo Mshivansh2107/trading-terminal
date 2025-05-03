@@ -9,6 +9,8 @@ import FormField from '../components/layout/form-field';
 import { PlusCircle, PencilIcon, TrashIcon } from 'lucide-react';
 import EditTransactionModal from '../components/edit-transaction-modal';
 import { PurchaseEntry, Bank, Platform } from '../types';
+import DateRangeFilter from '../components/date-range-filter';
+import { filterByDateAtom, dateRangeAtom } from '../store/filters';
 
 const Purchase = () => {
   const [purchases] = useAtom(purchasesAtom);
@@ -18,6 +20,8 @@ const Purchase = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<PurchaseEntry | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [filterByDate] = useAtom(filterByDateAtom);
+  const [dateRange] = useAtom(dateRangeAtom);
   
   // Form state for calculations
   const [totalPrice, setTotalPrice] = useState<string>('');
@@ -200,17 +204,25 @@ const Purchase = () => {
     { value: 'INR', label: 'INR' },
   ];
 
+  // Filter purchases data by date range
+  const filteredPurchases = useMemo(() => {
+    return filterByDate(purchases);
+  }, [filterByDate, purchases, dateRange]);
+
   return (
     <div className="p-4 md:p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Purchase Management</h1>
-        <Button 
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center"
-        >
-          <PlusCircle className="mr-2 h-4 w-4" />
-          {showForm ? 'Cancel' : 'New Purchase'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <DateRangeFilter />
+          <Button 
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center"
+          >
+            <PlusCircle className="mr-2 h-4 w-4" />
+            {showForm ? 'Cancel' : 'New Purchase'}
+          </Button>
+        </div>
       </div>
       
       {showForm && (
@@ -325,10 +337,10 @@ const Purchase = () => {
       )}
       
       <DataTable
-        data={purchases}
+        data={filteredPurchases}
         columns={columns}
         rowActions={rowActions}
-        title="Purchases List"
+        title="Purchase List"
       />
       
       {editingPurchase && (

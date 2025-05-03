@@ -245,17 +245,25 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
     }
   };
   
-  // Calculate cash balances using the adjusted method
-  const cashList = [
-    { bank: 'IDBI' as const, amount: calculateAdjustedBankBalance('IDBI') },
-    { bank: 'INDUSIND SS' as const, amount: calculateAdjustedBankBalance('INDUSIND SS') },
-    { bank: 'HDFC CAA SS' as const, amount: calculateAdjustedBankBalance('HDFC CAA SS') },
-    { bank: 'BOB SS' as const, amount: calculateAdjustedBankBalance('BOB SS') },
-    { bank: 'CANARA SS' as const, amount: calculateAdjustedBankBalance('CANARA SS') },
-    { bank: 'HDFC SS' as const, amount: calculateAdjustedBankBalance('HDFC SS') },
-    { bank: 'INDUSIND BLYNK' as const, amount: calculateAdjustedBankBalance('INDUSIND BLYNK') },
-    { bank: 'PNB' as const, amount: calculateAdjustedBankBalance('PNB') },
+  // Use dynamic banks from banksAtom to generate cash list
+  const availableBanks = get(banksAtom);
+  const defaultBanks: Bank[] = [
+    'IDBI', 'INDUSIND SS', 'HDFC CAA SS', 'BOB SS', 
+    'CANARA SS', 'HDFC SS', 'INDUSIND BLYNK', 'PNB'
   ];
+
+  // Get bank names either from database or fall back to defaults
+  const bankNames: Bank[] = availableBanks.length > 0 
+    ? availableBanks.filter(bank => bank.isActive).map(bank => bank.name as Bank)
+    : defaultBanks;
+
+  // Generate cash list for all banks
+  const cashList = bankNames.map(bankName => {
+    return { 
+      bank: bankName, 
+      amount: calculateAdjustedBankBalance(bankName) 
+    };
+  });
   
   const totalCash = cashList.reduce((total, cash) => total + cash.amount, 0);
   const netCash = netSales - netPurchases + netIncomes - netExpenses;
