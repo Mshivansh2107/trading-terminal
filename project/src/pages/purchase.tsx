@@ -102,6 +102,7 @@ const Purchase = () => {
       name: formData.get('name') as string,
       time: new Date().toLocaleTimeString(),
       contactNo: formData.get('contactNo') as string || undefined,
+      createdBy: '' // The actual value will be set by the addPurchaseAtom
     };
     
     addPurchase(newPurchase);
@@ -155,6 +156,11 @@ const Purchase = () => {
       key: 'createdAt', 
       label: 'Created At',
       formatter: (value: Date) => formatDateTime(new Date(value))
+    },
+    { 
+      key: 'createdBy', 
+      label: 'Created By',
+      formatter: (value: string) => value || '-'
     },
     // These columns can be hidden on mobile or smaller viewports
     { 

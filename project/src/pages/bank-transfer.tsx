@@ -35,6 +35,7 @@ const BankTransfer = () => {
       toAccount: formData.get('toAccount') as string,
       amount: parseFloat(formData.get('amount') as string),
       reference: formData.get('reference') as string || undefined,
+      createdBy: '' // The actual value will be set by the addBankTransferAtom
     };
     
     addBankTransfer(newBankTransfer);
@@ -81,6 +82,11 @@ const BankTransfer = () => {
       key: 'createdAt', 
       label: 'Created At',
       formatter: (value: Date) => formatDateTime(new Date(value))
+    },
+    { 
+      key: 'createdBy', 
+      label: 'Created By',
+      formatter: (value: string) => value || '-'
     },
     { 
       key: 'editedBy', 

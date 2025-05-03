@@ -26,6 +26,7 @@ export type SalesEntry = {
   createdAt: Date;
   updatedAt?: Date;
   editedBy?: string;
+  createdBy: string;
 }
 
 export type PurchaseEntry = {
@@ -44,6 +45,7 @@ export type PurchaseEntry = {
   createdAt: Date;
   updatedAt?: Date;
   editedBy?: string;
+  createdBy: string;
 }
 
 export type TransferEntry = {
@@ -54,6 +56,7 @@ export type TransferEntry = {
   createdAt: Date;
   updatedAt?: Date;
   editedBy?: string;
+  createdBy: string;
 }
 
 export type BankTransferEntry = {
@@ -87,6 +90,9 @@ export type ExpenseEntry = {
   category?: string;
   description?: string;
   createdAt: Date;
+  updatedAt?: Date;
+  editedBy?: string;
+  createdBy: string;
 }
 
 export type DashboardData = {

@@ -129,6 +129,7 @@ export default function Expenses() {
       category: formData.category || undefined,
       description: formData.description || undefined,
       createdAt: new Date(),
+      createdBy: '' // The actual value will be set by the addExpenseAtom
     };
 
     if (isEditing) {
@@ -219,6 +220,11 @@ export default function Expenses() {
       key: 'createdAt',
       label: 'Date/Time',
       formatter: (value: Date) => value ? new Date(value).toLocaleString() : ''
+    },
+    {
+      key: 'createdBy',
+      label: 'Created By',
+      formatter: (value: string) => value || '-'
     }
   ], []);
 

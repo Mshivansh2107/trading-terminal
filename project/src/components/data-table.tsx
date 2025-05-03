@@ -173,6 +173,8 @@ function getColumnMinWidth(columnKey: string): string {
       return '180px';
     case 'createdAt':
       return '180px';
+    case 'createdBy':
+      return '150px';
     case 'editedBy':
       return '150px';
     case 'updatedAt':

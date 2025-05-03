@@ -110,6 +110,7 @@ const Sales = () => {
       name: formData.get('name') as string,
       time: new Date().toLocaleTimeString(),
       contactNo: formData.get('contactNo') as string || undefined,
+      createdBy: '' // The actual value will be set by the addSaleAtom
     };
     
     addSale(newSale);
@@ -163,6 +164,11 @@ const Sales = () => {
       key: 'createdAt', 
       label: 'Created At',
       formatter: (value: Date) => formatDateTime(new Date(value))
+    },
+    { 
+      key: 'createdBy', 
+      label: 'Created By',
+      formatter: (value: string) => value || '-'
     },
     // These columns will appear after the action column now
     { 

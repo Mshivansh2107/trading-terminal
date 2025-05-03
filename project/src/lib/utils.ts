@@ -112,6 +112,7 @@ export function prepareExportData(sales: any[], purchases: any[], transfers: any
     name: sale.name,
     contactNo: sale.contactNo || '',
     createdAt: formatDateTime(new Date(sale.createdAt)),
+    createdBy: sale.createdBy || '',
     editedBy: sale.editedBy || '',
     updatedAt: sale.updatedAt ? formatDateTime(new Date(sale.updatedAt)) : ''
   }));
@@ -128,6 +129,7 @@ export function prepareExportData(sales: any[], purchases: any[], transfers: any
     name: purchase.name,
     contactNo: purchase.contactNo || '',
     createdAt: formatDateTime(new Date(purchase.createdAt)),
+    createdBy: purchase.createdBy || '',
     editedBy: purchase.editedBy || '',
     updatedAt: purchase.updatedAt ? formatDateTime(new Date(purchase.updatedAt)) : ''
   }));
@@ -144,6 +146,7 @@ export function prepareExportData(sales: any[], purchases: any[], transfers: any
     name: '-',
     contactNo: '-',
     createdAt: formatDateTime(new Date(transfer.createdAt)),
+    createdBy: transfer.createdBy || '',
     editedBy: transfer.editedBy || '',
     updatedAt: transfer.updatedAt ? formatDateTime(new Date(transfer.updatedAt)) : ''
   }));

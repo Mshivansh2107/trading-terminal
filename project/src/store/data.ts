@@ -359,6 +359,12 @@ export const statsDataAtom = atom<StatsData>((get) => {
   const filterByDate = get(filterByDateAtom);
   const isSingleDay = get(isSingleDaySelectionAtom);
   const formatDateByRange = get(formatDateByRangeAtom);
+  const dateRange = get(dateRangeAtom);
+  
+  // Only use hourly view when both conditions are met:
+  // 1. It's a single day selection
+  // 2. Date filtering is actually active
+  const shouldUseHourlyView = isSingleDay && dateRange.isActive;
   
   // Apply date filtering
   const filteredSales = filterByDate(sales);
@@ -372,7 +378,7 @@ export const statsDataAtom = atom<StatsData>((get) => {
     // Format differently based on single day or date range
     let dateKey, isoDateKey;
     
-    if (isSingleDay) {
+    if (shouldUseHourlyView) {
       // For single day view, group by hour of day
       dateKey = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       isoDateKey = `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`;
@@ -400,7 +406,7 @@ export const statsDataAtom = atom<StatsData>((get) => {
     // Format differently based on single day or date range
     let dateKey, isoDateKey;
     
-    if (isSingleDay) {
+    if (shouldUseHourlyView) {
       // For single day view, group by hour of day
       dateKey = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       isoDateKey = `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`;
@@ -430,7 +436,7 @@ export const statsDataAtom = atom<StatsData>((get) => {
       // Format differently based on single day or date range
       let dateKey, isoDateKey;
       
-      if (isSingleDay) {
+      if (shouldUseHourlyView) {
         // For single day view, group by hour of day
         dateKey = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         isoDateKey = `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`;
@@ -460,7 +466,7 @@ export const statsDataAtom = atom<StatsData>((get) => {
       // Format differently based on single day or date range
       let dateKey, isoDateKey;
       
-      if (isSingleDay) {
+      if (shouldUseHourlyView) {
         // For single day view, group by hour of day
         dateKey = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         isoDateKey = `${date.toISOString().split('T')[0]}T${date.getHours().toString().padStart(2, '0')}:00:00Z`;
@@ -491,7 +497,7 @@ export const statsDataAtom = atom<StatsData>((get) => {
   incomesByDayOrHour.sort(sortByIsoDate);
   
   // If single day and no hourly data points, create empty time slots for visualization
-  if (isSingleDay) {
+  if (shouldUseHourlyView) {
     // Get the selected date
     const selectedDate = new Date(get(dateRangeAtom).startDate).toISOString().split('T')[0];
     
@@ -618,7 +624,7 @@ function calculatePlatformTotal(items: Array<{platform: string, totalPrice: numb
 // Actions
 export const addSaleAtom = atom(
   null,
-  async (get, set, newSale: Omit<SalesEntry, 'id' | 'createdAt'>) => {
+  async (get, set, newSale: Omit<SalesEntry, 'id' | 'createdAt' | 'createdBy'>) => {
     const sales = get(salesAtom);
     const authState = get(authStateAtom);
     
@@ -626,6 +632,7 @@ export const addSaleAtom = atom(
       ...newSale,
       id: crypto.randomUUID(),
       createdAt: new Date(),
+      createdBy: authState.user?.email || 'Unknown user',
     };
     
     // Save to local storage via jotai
@@ -649,6 +656,7 @@ export const addSaleAtom = atom(
           name: saleWithId.name,
           contact_no: saleWithId.contactNo,
           created_at: saleWithId.createdAt.toISOString(),
+          created_by: saleWithId.createdBy,
           user_id: authState.user?.id || null,
           username: authState.user?.email || null
         });
@@ -997,7 +1005,8 @@ export const refreshDataAtom = atom(
           contactNo: sale.contact_no,
           createdAt: new Date(sale.created_at),
           updatedAt: sale.updated_at ? new Date(sale.updated_at) : undefined,
-          editedBy: sale.edited_by || undefined
+          editedBy: sale.edited_by || undefined,
+          createdBy: sale.created_by || sale.username || 'Unknown user'
         }));
         
         set(salesAtom, formattedSales);
@@ -1028,7 +1037,8 @@ export const refreshDataAtom = atom(
           contactNo: purchase.contact_no,
           createdAt: new Date(purchase.created_at),
           updatedAt: purchase.updated_at ? new Date(purchase.updated_at) : undefined,
-          editedBy: purchase.edited_by || undefined
+          editedBy: purchase.edited_by || undefined,
+          createdBy: purchase.created_by || purchase.username || 'Unknown user'
         }));
         
         set(purchasesAtom, formattedPurchases);
@@ -1051,7 +1061,8 @@ export const refreshDataAtom = atom(
           quantity: transfer.quantity,
           createdAt: new Date(transfer.created_at),
           updatedAt: transfer.updated_at ? new Date(transfer.updated_at) : undefined,
-          editedBy: transfer.edited_by || undefined
+          editedBy: transfer.edited_by || undefined,
+          createdBy: transfer.created_by || transfer.username || 'Unknown user'
         }));
         
         set(transfersAtom, formattedTransfers);
@@ -1101,6 +1112,7 @@ export const refreshDataAtom = atom(
           category: expense.category,
           description: expense.description,
           createdAt: new Date(expense.created_at),
+          createdBy: expense.created_by || expense.username || 'Unknown user'
         }));
         
         set(expensesAtom, formattedExpenses);
@@ -1378,7 +1390,8 @@ export const updateStockBalanceAtom = atom(
       const transferWithId: TransferEntry = {
         ...transferParams,
         id: crypto.randomUUID(),
-        createdAt: new Date()
+        createdAt: new Date(),
+        createdBy: authState.user?.email || 'Unknown user'
       };
       
       console.log('Transfer record created:', transferWithId);
@@ -1396,6 +1409,7 @@ export const updateStockBalanceAtom = atom(
         to_platform: transferWithId.to,
         quantity: transferWithId.quantity,
         created_at: transferWithId.createdAt.toISOString(),
+        created_by: transferWithId.createdBy,
         user_id: authState.user?.id || null,
         username: authState.user?.email || null,
         notes: `Manual stock adjustment to set ${platform} balance to ${quantity}`
@@ -1478,7 +1492,8 @@ export const updateCashBalanceAtom = atom(
         amount: Math.abs(difference),
         type: difference > 0 ? 'income' : 'expense',
         category: 'Manual Adjustment',
-        description: `Manual adjustment to set ${bank} balance to ${amount}`
+        description: `Manual adjustment to set ${bank} balance to ${amount}`,
+        createdBy: authState.user?.email || 'Unknown user'
       };
       
       console.log('Expense/income record created:', expenseWithId);

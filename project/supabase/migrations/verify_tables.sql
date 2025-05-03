@@ -12,6 +12,7 @@ BEGIN
             notes text,
             user_id text,
             username text,
+            created_by text,
             edited_by text,
             updated_at timestamptz,
             created_at timestamptz DEFAULT now()

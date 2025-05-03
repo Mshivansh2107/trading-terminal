@@ -37,6 +37,10 @@ const Stats = () => {
     console.log("Date range updated, stats will refresh automatically");
   }, [dateRange]);
   
+  // Function to determine if we should display hourly view
+  // Only show hourly view when a single day is selected AND date filtering is active
+  const shouldShowHourlyView = dateRange.isActive && isSingleDay;
+  
   // Generate pie chart colors
   const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
   
@@ -93,7 +97,7 @@ const Stats = () => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis 
                     dataKey="date" 
-                    label={{ value: isSingleDay ? "Time" : "Date", position: "insideBottomRight", offset: -5 }}
+                    label={{ value: shouldShowHourlyView ? "Time" : "Date", position: "insideBottomRight", offset: -5 }}
                   />
                   <YAxis />
                   <Tooltip formatter={(value) => formatCurrency(Number(value))} />
@@ -137,7 +141,7 @@ const Stats = () => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis 
                     dataKey="date" 
-                    label={{ value: isSingleDay ? "Time" : "Date", position: "insideBottomRight", offset: -5 }}
+                    label={{ value: shouldShowHourlyView ? "Time" : "Date", position: "insideBottomRight", offset: -5 }}
                   />
                   <YAxis />
                   <Tooltip formatter={(value) => `${value}%`} />
@@ -237,7 +241,7 @@ const Stats = () => {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="date" 
-                  label={{ value: isSingleDay ? "Time" : "Date", position: "insideBottomRight", offset: -5 }}
+                  label={{ value: shouldShowHourlyView ? "Time" : "Date", position: "insideBottomRight", offset: -5 }}
                 />
                 <YAxis />
                 <Tooltip formatter={(value) => formatCurrency(Number(value))} />
@@ -250,6 +254,123 @@ const Stats = () => {
           </div>
         </CardContent>
       </Card>
+      
+      {/* New Area Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Sales Stand versus Time Area Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Sales Stand versus Time</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={statsData.salesByDay}>
+                  <defs>
+                    <linearGradient id="colorSalesStand" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#10B981" stopOpacity={0.1}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="date" 
+                    label={{ 
+                      value: shouldShowHourlyView ? "Time of Day" : "Date", 
+                      position: "insideBottomRight", 
+                      offset: -5 
+                    }}
+                  />
+                  <YAxis 
+                    label={{ 
+                      value: "Amount", 
+                      angle: -90, 
+                      position: "insideLeft"
+                    }}
+                  />
+                  <Tooltip 
+                    formatter={(value) => formatCurrency(Number(value))}
+                    labelFormatter={(label) => shouldShowHourlyView ? `Time: ${label}` : `Date: ${label}`}
+                  />
+                  <Legend />
+                  <Area 
+                    type="monotone" 
+                    dataKey="amount" 
+                    name="Sales" 
+                    stroke="#10B981" 
+                    fillOpacity={1} 
+                    fill="url(#colorSalesStand)" 
+                    dot={{ stroke: '#10B981', strokeWidth: 2, r: 4, fill: 'white' }}
+                    activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2, fill: '#10B981' }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-4 text-sm text-gray-500 text-center">
+              {shouldShowHourlyView ? 
+                "Hourly sales distribution for the selected day" : 
+                "Daily sales distribution for the selected date range"}
+            </div>
+          </CardContent>
+        </Card>
+        
+        {/* Purchase Stand versus Time Area Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Purchase Stand versus Time</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={statsData.purchasesByDay}>
+                  <defs>
+                    <linearGradient id="colorPurchasesStand" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.1}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="date" 
+                    label={{ 
+                      value: shouldShowHourlyView ? "Time of Day" : "Date", 
+                      position: "insideBottomRight", 
+                      offset: -5 
+                    }}
+                  />
+                  <YAxis 
+                    label={{ 
+                      value: "Amount", 
+                      angle: -90, 
+                      position: "insideLeft"
+                    }}
+                  />
+                  <Tooltip 
+                    formatter={(value) => formatCurrency(Number(value))}
+                    labelFormatter={(label) => shouldShowHourlyView ? `Time: ${label}` : `Date: ${label}`}
+                  />
+                  <Legend />
+                  <Area 
+                    type="monotone" 
+                    dataKey="amount" 
+                    name="Purchases" 
+                    stroke="#3B82F6" 
+                    fillOpacity={1} 
+                    fill="url(#colorPurchasesStand)" 
+                    dot={{ stroke: '#3B82F6', strokeWidth: 2, r: 4, fill: 'white' }}
+                    activeDot={{ r: 6, stroke: '#3B82F6', strokeWidth: 2, fill: '#3B82F6' }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-4 text-sm text-gray-500 text-center">
+              {shouldShowHourlyView ? 
+                "Hourly purchase distribution for the selected day" : 
+                "Daily purchase distribution for the selected date range"}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
