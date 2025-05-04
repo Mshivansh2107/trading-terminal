@@ -271,8 +271,8 @@ const Transfer = () => {
         </Card>
       )}
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <div className="lg:col-span-2 bg-white rounded-lg shadow">
+      <div className="space-y-6 mb-6">
+        <div className="bg-white rounded-lg shadow">
           <div className="p-4">
             <DataTable 
               data={filteredTransfers} 
@@ -284,38 +284,40 @@ const Transfer = () => {
           </div>
         </div>
         
-        <div className="lg:col-span-1">
-          <Card>
-            <CardHeader>
-              <CardTitle>Platform Balances</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Platform Balances</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <div className="min-w-full">
                 <div className="grid grid-cols-4 gap-2 text-sm font-medium text-gray-500 border-b pb-2">
-                  <div>Platform</div>
-                  <div className="text-right">From</div>
-                  <div className="text-right">To</div>
-                  <div className="text-right">Net</div>
+                  <div className="min-w-[100px]">Platform</div>
+                  <div className="text-right min-w-[80px]">From</div>
+                  <div className="text-right min-w-[80px]">To</div>
+                  <div className="text-right min-w-[80px]">Net</div>
                 </div>
                 
-                {platformTotals.length > 0 ? (
-                  platformTotals.map((item, i) => (
-                    <div key={i} className="grid grid-cols-4 gap-2 text-sm">
-                      <div className="font-medium">{item.platform}</div>
-                      <div className="text-right text-red-600">{formatQuantity(item.from)}</div>
-                      <div className="text-right text-green-600">{formatQuantity(item.to)}</div>
-                      <div className={`text-right font-semibold ${item.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatQuantity(item.net)}
+                <div className="space-y-2 mt-2">
+                  {platformTotals.length > 0 ? (
+                    platformTotals.map((item, i) => (
+                      <div key={i} className="grid grid-cols-4 gap-2 text-sm py-1">
+                        <div className="font-medium truncate min-w-[100px]" title={item.platform}>{item.platform}</div>
+                        <div className="text-right text-red-600 min-w-[80px]">{formatQuantity(item.from)}</div>
+                        <div className="text-right text-green-600 min-w-[80px]">{formatQuantity(item.to)}</div>
+                        <div className={`text-right font-semibold min-w-[80px] ${item.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatQuantity(item.net)}
+                        </div>
                       </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center text-gray-500 py-4">No transfer data available</div>
-                )}
+                    ))
+                  ) : (
+                    <div className="text-center text-gray-500 py-4">No transfer data available</div>
+                  )}
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
       
       {/* Edit Transaction Modal */}

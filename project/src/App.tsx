@@ -19,6 +19,7 @@ import Login from './pages/login';
 import Register from './pages/register';
 import ResetPassword from './pages/reset-password';
 import AdminUsers from './pages/admin/users';
+import Analytics from './pages/analytics';
 
 // Components
 import Navbar from './components/layout/navbar';
@@ -91,9 +92,9 @@ function App() {
   return (
     <Router>
       <ToastProvider>
-      <div className="min-h-screen bg-gray-50 flex overflow-hidden">
-        <Navbar />
-        
+        <div className="min-h-screen bg-gray-50 flex overflow-hidden">
+          <Navbar />
+          
           <main className={`flex-1 ${authState.isAuthenticated ? 'ml-16 md:ml-64' : ''} min-h-screen bg-gray-50 transition-all duration-300 ease-in-out overflow-x-hidden`}>
           {authState.isAuthenticated && <GlobalDateFilter />}
           <div className="w-full overflow-x-hidden">
@@ -147,6 +148,12 @@ function App() {
               <Route path="/platforms" element={
                 <ProtectedRoute>
                   <Platforms />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/analytics" element={
+                <ProtectedRoute>
+                  <Analytics />
                 </ProtectedRoute>
               } />
               
