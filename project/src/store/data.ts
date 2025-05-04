@@ -667,8 +667,8 @@ export const statsDataAtom = atom<StatsData>((get) => {
       });
       
       const margin = calculateDailyProfitMargin(salesForDay, purchasesForDay);
-      
-      return {
+  
+  return {
         date,
         isoDate: date, // Already in ISO format
         margin
