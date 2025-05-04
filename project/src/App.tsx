@@ -80,8 +80,9 @@ function App() {
       
       // Set up auto-fetch interval for USD price
       const interval = setInterval(() => {
+        console.log(`[${new Date().toLocaleString()}] Triggering USD-INR rate update (every ~65.5 minutes)`);
         autoFetchPrice().catch(err => console.error('Error auto-fetching price:', err));
-      }, 60000); // Fetch every minute
+      }, 3930000); // ~65.5 minutes - allows for ~22 calls per day
       
       return () => clearInterval(interval);
     }
