@@ -25,23 +25,8 @@ export function PlatformSelector({
   // Ensure we have a string value
   const safeValue = value || '';
 
-  // Fallback platforms to use if no platforms are in the store
-  const fallbackPlatforms = [
-    { id: 'binance-ss', name: 'BINANCE SS' },
-    { id: 'binance-as', name: 'BINANCE AS' },
-    { id: 'bybit-ss', name: 'BYBIT SS' },
-    { id: 'bybit-as', name: 'BYBIT AS' },
-    { id: 'bitget-ss', name: 'BITGET SS' },
-    { id: 'bitget-as', name: 'BITGET AS' },
-    { id: 'kucoin-ss', name: 'KUCOIN SS' },
-    { id: 'kucoin-as', name: 'KUCOIN AS' },
-    { id: 'adjustment', name: 'ADJUSTMENT' },
-  ];
-
-  // Use platforms from store if available, otherwise use fallback
-  const platformOptions = platforms.length > 0 
-    ? platforms.filter(platform => platform.isActive) 
-    : fallbackPlatforms;
+  // Use platforms from store only
+  const platformOptions = platforms.filter(platform => platform.isActive);
 
   // Handle value change with safety checks
   const handleValueChange = (newValue: string) => {

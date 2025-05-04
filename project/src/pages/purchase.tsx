@@ -194,7 +194,9 @@ const Purchase = () => {
   const [banks] = useAtom(banksAtom);
   const [platforms] = useAtom(platformsAtom);
   
+  // Replace hardcoded banks with data from database
   const bankOptions = useMemo(() => {
+    // Use banks from the store if available
     if (banks && banks.length > 0) {
       return banks
         .filter(bank => bank.isActive)
@@ -204,16 +206,8 @@ const Purchase = () => {
         }));
     }
     
-    return [
-    { value: 'IDBI', label: 'IDBI' },
-    { value: 'INDUSIND SS', label: 'INDUSIND SS' },
-    { value: 'HDFC CAA SS', label: 'HDFC CAA SS' },
-    { value: 'BOB SS', label: 'BOB SS' },
-    { value: 'CANARA SS', label: 'CANARA SS' },
-    { value: 'HDFC SS', label: 'HDFC SS' },
-    { value: 'INDUSIND BLYNK', label: 'INDUSIND BLYNK' },
-    { value: 'PNB', label: 'PNB' },
-  ];
+    // Return empty array if no banks are available
+    return [];
   }, [banks]);
   
   const currencies = [
@@ -233,17 +227,8 @@ const Purchase = () => {
         }));
     }
     
-    // Fallback to hardcoded platforms if no data is available
-    return [
-      { value: 'BINANCE SS', label: 'BINANCE SS' },
-      { value: 'BINANCE AS', label: 'BINANCE AS' },
-      { value: 'BYBIT SS', label: 'BYBIT SS' },
-      { value: 'BYBIT AS', label: 'BYBIT AS' },
-      { value: 'BITGET SS', label: 'BITGET SS' },
-      { value: 'BITGET AS', label: 'BITGET AS' },
-      { value: 'KUCOIN SS', label: 'KUCOIN SS' },
-      { value: 'KUCOIN AS', label: 'KUCOIN AS' },
-    ];
+    // Return empty array if no platforms are available
+    return [];
   }, [platforms]);
   
   // Filter purchases data by date range

@@ -63,22 +63,11 @@ export default function Expenses() {
 
   // Dynamic banks from banksAtom
   const BANKS = useMemo(() => {
-    if (banks && banks.length > 0) {
-      return banks
-        .filter(bank => bank.isActive)
-        .map(bank => bank.name as Bank);
-    }
-    // Fallback banks
-    return [
-      'IDBI',
-      'INDUSIND SS',
-      'HDFC CAA SS',
-      'BOB SS',
-      'CANARA SS',
-      'HDFC SS',
-      'INDUSIND BLYNK',
-      'PNB'
-    ] as Bank[];
+    return banks && banks.length > 0
+      ? banks
+          .filter(bank => bank.isActive)
+          .map(bank => bank.name as Bank)
+      : [] as Bank[];
   }, [banks]);
 
   // State for form inputs

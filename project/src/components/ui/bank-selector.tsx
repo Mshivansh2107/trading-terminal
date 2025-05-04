@@ -25,22 +25,8 @@ export function BankSelector({
   // Ensure we have a string value
   const safeValue = value || '';
 
-  // Fallback banks to use if no banks are in the store
-  const fallbackBanks = [
-    { id: 'idbi', name: 'IDBI' },
-    { id: 'indusind-ss', name: 'INDUSIND SS' },
-    { id: 'hdfc-caa-ss', name: 'HDFC CAA SS' },
-    { id: 'bob-ss', name: 'BOB SS' },
-    { id: 'canara-ss', name: 'CANARA SS' },
-    { id: 'hdfc-ss', name: 'HDFC SS' },
-    { id: 'indusind-blynk', name: 'INDUSIND BLYNK' },
-    { id: 'pnb', name: 'PNB' },
-  ];
-
-  // Use banks from store if available, otherwise use fallback
-  const bankOptions = banks.length > 0 
-    ? banks.filter(bank => bank.isActive) 
-    : fallbackBanks;
+  // Use banks from store only
+  const bankOptions = banks.filter(bank => bank.isActive);
     
   // Handle value change with safety checks
   const handleValueChange = (newValue: string) => {

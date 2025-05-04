@@ -97,17 +97,8 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
         }));
     }
     
-    // Fallback options
-    return [
-      { value: 'BINANCE SS', label: 'BINANCE SS' },
-      { value: 'BINANCE AS', label: 'BINANCE AS' },
-      { value: 'BYBIT SS', label: 'BYBIT SS' },
-      { value: 'BYBIT AS', label: 'BYBIT AS' },
-      { value: 'BITGET SS', label: 'BITGET SS' },
-      { value: 'BITGET AS', label: 'BITGET AS' },
-      { value: 'KUCOIN SS', label: 'KUCOIN SS' },
-      { value: 'KUCOIN AS', label: 'KUCOIN AS' },
-    ];
+    // Return empty array if no platforms are available
+    return [];
   }, [providedPlatforms, platformsData]);
   
   // Generate bank options
@@ -127,17 +118,8 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
         }));
     }
     
-    // Fallback options
-    return [
-      { value: 'IDBI', label: 'IDBI' },
-      { value: 'INDUSIND SS', label: 'INDUSIND SS' },
-      { value: 'HDFC CAA SS', label: 'HDFC CAA SS' },
-      { value: 'BOB SS', label: 'BOB SS' },
-      { value: 'CANARA SS', label: 'CANARA SS' },
-      { value: 'HDFC SS', label: 'HDFC SS' },
-      { value: 'INDUSIND BLYNK', label: 'INDUSIND BLYNK' },
-      { value: 'PNB', label: 'PNB' },
-    ];
+    // Return empty array if no banks are available
+    return [];
   }, [providedBanks, banksData]);
   
   // Initialize form data when modal opens or data changes
