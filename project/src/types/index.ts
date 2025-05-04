@@ -162,6 +162,17 @@ export type StatsData = {
     bank: Bank;
     amount: number;
   }[];
+  dailyProfitMargins: {
+    date: string;
+    isoDate: string;
+    margin: number;
+  }[];
+  dailyNpmValues: {
+    date: string;
+    isoDate: string;
+    npmValue: number;
+  }[];
+  dailyNpm: number;
 }
 
 export interface Transaction {

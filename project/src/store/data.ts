@@ -18,7 +18,8 @@ import {
   calculateNetPurchases, 
   calculateMargin,
   calculateStockBalance,
-  calculateBankTotal
+  calculateBankTotal,
+  calculateDailyProfitMargin
 } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import { authStateAtom } from './supabaseAuth';
@@ -189,7 +190,45 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   const netIncomes = filteredExpenses
     .filter(e => e.type === 'income')
     .reduce((total, e) => total + e.amount, 0);
-  const currentMargin = calculateMargin(netSales, netPurchases);
+  
+  // Calculate NPM instead of simple percentage margin
+  const currentMargin = (() => {
+    // Group sales by totalPrice and quantity
+    const totalSalesPrice = filteredSales.reduce((sum, sale) => sum + sale.totalPrice, 0);
+    const totalSalesQuantity = filteredSales.reduce((sum, sale) => sum + sale.quantity, 0);
+    
+    // Group purchases by totalPrice and quantity
+    const totalPurchasePrice = filteredPurchases.reduce((sum, purchase) => sum + purchase.totalPrice, 0);
+    const totalPurchaseQuantity = filteredPurchases.reduce((sum, purchase) => sum + purchase.quantity, 0);
+    
+    console.log('Current NPM calculation for dashboard:', {
+      totalSalesPrice,
+      totalSalesQuantity,
+      totalPurchasePrice,
+      totalPurchaseQuantity,
+      hasSufficientData: (totalSalesQuantity > 0 && totalPurchaseQuantity > 0) ? 'Yes' : 'No'
+    });
+    
+    // If we don't have sufficient data, return 0
+    if (totalSalesQuantity <= 0 || totalPurchaseQuantity <= 0) {
+      console.log('Insufficient data for NPM calculation, returning 0');
+      return 0;
+    }
+    
+    // Calculate the ratios
+    const salesRatio = totalSalesPrice / totalSalesQuantity;
+    const purchaseRatio = totalPurchasePrice / totalPurchaseQuantity;
+    
+    // Calculate NPM
+    const npmValue = salesRatio - purchaseRatio;
+    console.log('NPM calculation complete:', {
+      salesRatio,
+      purchaseRatio,
+      npmValue: parseFloat(npmValue.toFixed(2))
+    });
+    
+    return parseFloat(npmValue.toFixed(2));
+  })();
   
   // For stock calculations, we need to handle differently, as stock is cumulative:
   // - If filtering is active, calculate stock at the end of the filter period 
@@ -217,8 +256,7 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   // Get platforms from the platformsAtom if available
   const platformNames = availablePlatforms.length > 0
     ? availablePlatforms.filter(p => p.isActive).map(p => p.name as Platform)
-    : ['BINANCE AS', 'BYBIT AS', 'BITGET AS', 'KUCOIN AS',
-       'BINANCE SS', 'BYBIT SS', 'BITGET SS', 'KUCOIN SS'] as Platform[];
+    : []; // No default platforms - wait for backend data
   
   const stockList = platformNames.map(platform => ({
     platform,
@@ -256,16 +294,12 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   
   // Use dynamic banks from banksAtom to generate cash list
   const availableBanks = get(banksAtom);
-  const defaultBanks: Bank[] = [
-    'IDBI', 'INDUSIND SS', 'HDFC CAA SS', 'BOB SS', 
-    'CANARA SS', 'HDFC SS', 'INDUSIND BLYNK', 'PNB'
-  ];
-
-  // Get bank names either from database or fall back to defaults
+  
+  // Get bank names from database only
   const bankNames: Bank[] = availableBanks.length > 0 
     ? availableBanks.filter(bank => bank.isActive).map(bank => bank.name as Bank)
-    : defaultBanks;
-
+    : []; // No default banks - wait for backend data
+  
   // Generate cash list for all banks
   const cashList = bankNames.map(bankName => {
     return { 
@@ -274,8 +308,18 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
     };
   });
   
-  const totalCash = cashList.reduce((total, cash) => total + cash.amount, 0);
+  // Get current USDT price for stock value calculation
+  const currentUsdPrice = settings.currentUsdPrice || 0;
+  
+  // Calculate net cash (sum of bank balances)
+  const bankBalanceTotal = cashList.reduce((total, cash) => total + cash.amount, 0);
   const netCash = netSales - netPurchases + netIncomes - netExpenses;
+  
+  // Calculate total value of stock in USDT
+  const totalStockValue = stockList.reduce((total, stock) => total + (stock.quantity * currentUsdPrice), 0);
+  
+  // Total cash is sum of bank balances plus stock value converted to INR
+  const totalCash = bankBalanceTotal + totalStockValue;
   
   // Calculate average prices from filtered transactions
   const salesTransactions = filteredSales.length > 0 ? filteredSales : [];
@@ -301,7 +345,6 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
     : 0;
   
   // Calculate buy price range according to formula: ((buy price of USD - current price of USD) / current price of USD) * 100
-  const currentUsdPrice = settings.currentUsdPrice || 0;
   const buyPriceUsdt = settings.buyPriceUsdt || 0;
   let buyPriceRange = 0;
   
@@ -314,16 +357,17 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   const requiredMargin = settings.requiredMargin;
   
   // Calculate net cash after sales started in POS
-  const posStartDate = new Date('2023-01-01'); // Replace with actual start date
-  const salesAfterPosStart = sales
-    .filter(s => new Date(s.createdAt) >= posStartDate)
-    .filter(s => isDateInRange(s.createdAt))
-    .reduce((sum, s) => sum + s.totalPrice, 0);
-  const purchasesAfterPosStart = purchases
-    .filter(p => new Date(p.createdAt) >= posStartDate)
-    .filter(p => isDateInRange(p.createdAt))
-    .reduce((sum, p) => sum + p.totalPrice, 0);
-  const netCashAfterSales = netCash - (salesAfterPosStart - purchasesAfterPosStart);
+  // Sum all bank balances, except those that can be manually edited
+  // Banks that are used for manual adjustments should be excluded
+  const manuallyEditableBanks: string[] = [
+    'ADJUSTMENT', 
+    // Add any other banks that should be excluded from the "net cash after sales" calculation
+    // These are typically banks that might have been manually edited to adjust balances
+  ];
+  
+  const netCashAfterSales = cashList
+    .filter(cash => !manuallyEditableBanks.includes(cash.bank))
+    .reduce((sum, cash) => sum + cash.amount, 0);
   
   return {
     salesPriceRange,
@@ -539,28 +583,18 @@ export const statsDataAtom = atom<StatsData>((get) => {
   }
   
   // Calculate sales by bank
-  const salesByBank = [
-    { bank: 'IDBI' as const, amount: calculateBankTotal(filteredSales, 'IDBI') },
-    { bank: 'CANARA SS' as const, amount: calculateBankTotal(filteredSales, 'CANARA SS') },
-    { bank: 'BOB SS' as const, amount: calculateBankTotal(filteredSales, 'BOB SS') },
-    { bank: 'PNB' as const, amount: calculateBankTotal(filteredSales, 'PNB') },
-    { bank: 'INDUSIND BLYNK' as const, amount: calculateBankTotal(filteredSales, 'INDUSIND BLYNK') },
-    { bank: 'HDFC SS' as const, amount: calculateBankTotal(filteredSales, 'HDFC SS') },
-  ];
-  
-  // Build dynamic bank list from banksAtom
+  // Get available banks from banksAtom
   const availableBanks = get(banksAtom);
-  let banksList = salesByBank;
   
-  if (availableBanks && availableBanks.length > 0) {
-    // Create entries for all active banks
-    banksList = availableBanks
-      .filter(bank => bank.isActive)
-      .map(bank => ({ 
-        bank: bank.name as Bank, 
-        amount: calculateBankTotal(filteredSales, bank.name as Bank) 
-      })) as typeof salesByBank;
-  }
+  // Create bank list using only backend data
+  const banksList = availableBanks.length > 0
+    ? availableBanks
+        .filter(bank => bank.isActive)
+        .map(bank => ({
+          bank: bank.name as Bank,
+          amount: calculateBankTotal(filteredSales, bank.name as Bank)
+        }))
+    : []; // Empty array if no banks are available from backend
   
   // Get platform names from platformsAtom
   const platformsList = availablePlatforms.length > 0
@@ -570,12 +604,7 @@ export const statsDataAtom = atom<StatsData>((get) => {
           platform: platform.name as Platform,
           amount: calculatePlatformTotal(filteredSales, platform.name)
         }))
-    : [
-        { platform: 'BINANCE SS' as const, amount: calculatePlatformTotal(filteredSales, 'BINANCE SS') },
-        { platform: 'BINANCE AS' as const, amount: calculatePlatformTotal(filteredSales, 'BINANCE AS') },
-        { platform: 'BYBIT AS' as const, amount: calculatePlatformTotal(filteredSales, 'BYBIT AS') },
-        { platform: 'BITGET SS' as const, amount: calculatePlatformTotal(filteredSales, 'BITGET SS') },
-      ];
+    : []; // Empty array if no platforms are available from backend
 
   // Generate platform purchase statistics
   const platformPurchasesList = availablePlatforms.length > 0
@@ -585,12 +614,74 @@ export const statsDataAtom = atom<StatsData>((get) => {
           platform: platform.name as Platform,
           amount: calculatePlatformTotal(filteredPurchases, platform.name)
         }))
-    : [
-        { platform: 'BINANCE SS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BINANCE SS') },
-        { platform: 'BINANCE AS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BINANCE AS') },
-        { platform: 'BYBIT AS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BYBIT AS') },
-        { platform: 'BITGET SS' as const, amount: calculatePlatformTotal(filteredPurchases, 'BITGET SS') },
-      ];
+    : []; // Empty array if no platforms are available from backend
+  
+  // Calculate daily profit margins
+  const dailyProfitMargins = (() => {
+    console.log('Starting NPM calculations for stats view');
+    
+    // Group sales by date
+    const salesByDate = new Map<string, Array<{totalPrice: number, price: number, quantity: number}>>();
+    filteredSales.forEach(sale => {
+      const dateKey = new Date(sale.createdAt).toISOString().split('T')[0]; // YYYY-MM-DD
+      if (!salesByDate.has(dateKey)) {
+        salesByDate.set(dateKey, []);
+      }
+      salesByDate.get(dateKey)!.push({ 
+        totalPrice: sale.totalPrice,
+        price: sale.price,
+        quantity: sale.quantity
+      });
+    });
+    
+    // Group purchases by date
+    const purchasesByDate = new Map<string, Array<{totalPrice: number, price: number, quantity: number}>>();
+    filteredPurchases.forEach(purchase => {
+      const dateKey = new Date(purchase.createdAt).toISOString().split('T')[0]; // YYYY-MM-DD
+      if (!purchasesByDate.has(dateKey)) {
+        purchasesByDate.set(dateKey, []);
+      }
+      purchasesByDate.get(dateKey)!.push({ 
+        totalPrice: purchase.totalPrice,
+        price: purchase.price,
+        quantity: purchase.quantity
+      });
+    });
+    
+    console.log('NPM calculation - Grouped data:', {
+      datesWithSales: Array.from(salesByDate.keys()),
+      datesWithPurchases: Array.from(purchasesByDate.keys()),
+      totalDates: new Set([...salesByDate.keys(), ...purchasesByDate.keys()]).size
+    });
+    
+    // Calculate profit margin for each date
+    const allDates = new Set([...salesByDate.keys(), ...purchasesByDate.keys()]);
+    
+    const results = Array.from(allDates).map(date => {
+      const salesForDay = salesByDate.get(date) || [];
+      const purchasesForDay = purchasesByDate.get(date) || [];
+      
+      console.log(`NPM calculation for date: ${date}`, {
+        salesCount: salesForDay.length,
+        purchasesCount: purchasesForDay.length
+      });
+      
+      const margin = calculateDailyProfitMargin(salesForDay, purchasesForDay);
+      
+      return {
+        date,
+        isoDate: date, // Already in ISO format
+        margin
+      };
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Sort desc by date
+    
+    console.log('NPM calculation - Final results:', {
+      totalDaysCalculated: results.length,
+      sampleResults: results.slice(0, 3) // Log first 3 days as sample
+    });
+    
+    return results;
+  })();
   
   return {
     salesByDay: salesByDayOrHour,
@@ -613,6 +704,70 @@ export const statsDataAtom = atom<StatsData>((get) => {
       amount: filteredExpenses.filter(e => e.bank === bankItem.bank && e.type === 'income').reduce((sum, e) => sum + e.amount, 0)
     })),
     cashDistribution: get(dashboardDataAtom).cashList,
+    dailyProfitMargins,
+    
+    // Calculate day-on-day NPM values (total USDT sales × NPM for each day)
+    dailyNpmValues: (() => {
+      // Group sales by date to calculate daily USDT volume
+      const usdtSalesByDate = new Map<string, number>();
+      
+      // Sum up USDT quantities for each day
+      filteredSales.forEach(sale => {
+        const dateKey = new Date(sale.createdAt).toISOString().split('T')[0]; // YYYY-MM-DD
+        const currentTotal = usdtSalesByDate.get(dateKey) || 0;
+        usdtSalesByDate.set(dateKey, currentTotal + sale.quantity);
+      });
+      
+      // Calculate NPM for each day by multiplying that day's USDT sales by its margin
+      const npmByDay = dailyProfitMargins.map(dayMargin => {
+        const dateKey = dayMargin.date;
+        const usdtSales = usdtSalesByDate.get(dateKey) || 0;
+        
+        // If no sales or margin is 0, NPM is 0
+        const npmValue = (usdtSales === 0 || dayMargin.margin === 0) ? 0 : usdtSales * dayMargin.margin;
+        
+        return {
+          date: dayMargin.date,
+          isoDate: dayMargin.isoDate,
+          npmValue: parseFloat(npmValue.toFixed(2))
+        };
+      }).sort((a, b) => new Date(a.isoDate).getTime() - new Date(b.isoDate).getTime()); // Sort by date ascending
+      
+      console.log('Daily NPM values calculation:', {
+        daysWithData: npmByDay.length,
+        daysWithZeroNpm: npmByDay.filter(day => day.npmValue === 0).length,
+        sampleData: npmByDay.slice(0, 3)
+      });
+      
+      return npmByDay;
+    })(),
+    
+    // Calculate NPM (total sales in USDT × current margin of today only)
+    dailyNpm: (() => {
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get total sales for today in USDT (using quantity instead of total price)
+      const todaySalesInUsdt = filteredSales
+        .filter(sale => new Date(sale.createdAt).toISOString().split('T')[0] === today)
+        .reduce((sum, sale) => sum + sale.quantity, 0);
+      
+      // Get today's margin from dailyProfitMargins
+      const todayMargin = dailyProfitMargins.find(d => d.date === today)?.margin || 0;
+      
+      // If no sales today or margin is 0, NPM is 0
+      const npm = (todaySalesInUsdt === 0 || todayMargin === 0) ? 0 : todaySalesInUsdt * todayMargin;
+      
+      console.log('Daily NPM calculation:', {
+        today,
+        todaySalesInUsdt,
+        todayMargin,
+        npm,
+        isZero: npm === 0 ? 'Yes - No data for today' : 'No - Has valid data'
+      });
+      
+      return npm;
+    })()
   };
 });
 
@@ -1580,33 +1735,14 @@ export const fetchBanksAtom = atom(
         }));
         set(banksAtom, formattedBanks);
       } else {
-        // Fallback banks if none in database
-        const fallbackBanks: BankEntity[] = [
-          { id: 'idbi', name: 'IDBI', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-          { id: 'indusind-ss', name: 'INDUSIND SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-          { id: 'hdfc-caa-ss', name: 'HDFC CAA SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-          { id: 'bob-ss', name: 'BOB SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-          { id: 'canara-ss', name: 'CANARA SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-          { id: 'hdfc-ss', name: 'HDFC SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-          { id: 'indusind-blynk', name: 'INDUSIND BLYNK', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-          { id: 'pnb', name: 'PNB', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        ];
-        set(banksAtom, fallbackBanks);
+        // No banks in database
+        console.log('No banks found in database');
+        set(banksAtom, []);
       }
     } catch (error) {
       console.error('Error fetching banks:', error);
-      // Use fallback banks on error
-      const fallbackBanks: BankEntity[] = [
-        { id: 'idbi', name: 'IDBI', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'indusind-ss', name: 'INDUSIND SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'hdfc-caa-ss', name: 'HDFC CAA SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'bob-ss', name: 'BOB SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'canara-ss', name: 'CANARA SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'hdfc-ss', name: 'HDFC SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'indusind-blynk', name: 'INDUSIND BLYNK', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'pnb', name: 'PNB', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-      ];
-      set(banksAtom, fallbackBanks);
+      // Do not set fallback banks on error
+      set(banksAtom, []);
     }
   }
 );
@@ -1737,33 +1873,14 @@ export const fetchPlatformsAtom = atom(
         }));
         set(platformsAtom, formattedPlatforms);
       } else {
-        // Fallback platforms if none in database
-        const fallbackPlatforms: PlatformEntity[] = [
-          { id: 'binance-ss', name: 'BINANCE SS', description: 'Binance Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-          { id: 'binance-as', name: 'BINANCE AS', description: 'Binance Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-          { id: 'bybit-ss', name: 'BYBIT SS', description: 'Bybit Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-          { id: 'bybit-as', name: 'BYBIT AS', description: 'Bybit Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-          { id: 'bitget-ss', name: 'BITGET SS', description: 'Bitget Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-          { id: 'bitget-as', name: 'BITGET AS', description: 'Bitget Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-          { id: 'kucoin-ss', name: 'KUCOIN SS', description: 'KuCoin Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-          { id: 'kucoin-as', name: 'KUCOIN AS', description: 'KuCoin Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        ];
-        set(platformsAtom, fallbackPlatforms);
+        // No platforms in database
+        console.log('No platforms found in database');
+        set(platformsAtom, []);
       }
     } catch (error) {
       console.error('Error fetching platforms:', error);
-      // Use fallback platforms on error
-      const fallbackPlatforms: PlatformEntity[] = [
-        { id: 'binance-ss', name: 'BINANCE SS', description: 'Binance Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'binance-as', name: 'BINANCE AS', description: 'Binance Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'bybit-ss', name: 'BYBIT SS', description: 'Bybit Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'bybit-as', name: 'BYBIT AS', description: 'Bybit Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'bitget-ss', name: 'BITGET SS', description: 'Bitget Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'bitget-as', name: 'BITGET AS', description: 'Bitget Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'kucoin-ss', name: 'KUCOIN SS', description: 'KuCoin Spot Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'kucoin-as', name: 'KUCOIN AS', description: 'KuCoin Arbitrage Selling', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-      ];
-      set(platformsAtom, fallbackPlatforms);
+      // Do not set fallback platforms on error
+      set(platformsAtom, []);
     }
   }
 );

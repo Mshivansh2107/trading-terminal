@@ -116,7 +116,7 @@ const BankTransfer = () => {
     }
   ], [handleEdit, handleDelete]);
   
-  // Convert dynamic banks to options format
+  // Get bank options from the store
   const bankOptions = useMemo(() => {
     // Use banks from the store if available
     if (banks && banks.length > 0) {
@@ -128,17 +128,8 @@ const BankTransfer = () => {
         }));
     }
     
-    // Fallback to hardcoded banks if no data is available
-    return [
-      { value: 'IDBI', label: 'IDBI' },
-      { value: 'INDUSIND SS', label: 'INDUSIND SS' },
-      { value: 'HDFC CAA SS', label: 'HDFC CAA SS' },
-      { value: 'BOB SS', label: 'BOB SS' },
-      { value: 'CANARA SS', label: 'CANARA SS' },
-      { value: 'HDFC SS', label: 'HDFC SS' },
-      { value: 'INDUSIND BLYNK', label: 'INDUSIND BLYNK' },
-      { value: 'PNB', label: 'PNB' },
-    ];
+    // Return empty array if no banks are available
+    return [];
   }, [banks]);
   
   const accounts = [

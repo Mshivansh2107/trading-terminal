@@ -152,10 +152,7 @@ const Transfer = () => {
     // Get platform names from the platformsAtom
     const platformNames = platforms.length > 0
       ? platforms.filter(p => p.isActive).map(p => p.name)
-      : [
-          'BINANCE SS', 'BINANCE AS', 'BYBIT SS', 'BYBIT AS', 
-          'BITGET SS', 'BITGET AS', 'KUCOIN SS', 'KUCOIN AS'
-        ];
+      : []; // Use empty array if no platforms are available
     
     // Initialize all platforms with zeros
     platformNames.forEach(platform => {

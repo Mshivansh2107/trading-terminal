@@ -154,3 +154,118 @@ export function prepareExportData(sales: any[], purchases: any[], transfers: any
   // Combine all data
   return [...formattedSales, ...formattedPurchases, ...formattedTransfers];
 }
+
+/**
+ * Calculate daily profit margin
+ * 
+ * Formula:
+ * Profit Margin = (Sales Price Ratio) - (Purchase Price Ratio)
+ * 
+ * Where:
+ * - Sales Price Ratio = sum(total price of sales) / sum(quantity of sales)
+ * - Purchase Price Ratio = sum(total price of purchases) / sum(quantity of purchases)
+ * 
+ * @param salesForDay - Sales transactions for a specific day
+ * @param purchasesForDay - Purchase transactions for a specific day
+ * @returns The calculated profit margin as a percentage (or 0 if there's insufficient data)
+ */
+export function calculateDailyProfitMargin(
+  salesForDay: Array<{totalPrice: number, price: number, quantity?: number}>,
+  purchasesForDay: Array<{totalPrice: number, price: number, quantity?: number}>
+): number {
+  console.log('NPM Calculation - Input data:', {
+    salesCount: salesForDay.length,
+    purchasesCount: purchasesForDay.length,
+    salesSample: salesForDay.slice(0, 3), // Log first 3 items as sample
+    purchasesSample: purchasesForDay.slice(0, 3) // Log first 3 items as sample
+  });
+
+  // Handle edge case: no data
+  if (salesForDay.length === 0 || purchasesForDay.length === 0) {
+    console.log('NPM Calculation - No data for sales or purchases, returning 0');
+    return 0;
+  }
+
+  // Calculate sales ratio using quantity
+  const totalSalesPrice = salesForDay.reduce((sum, sale) => {
+    // Handle invalid data
+    if (isNaN(sale.totalPrice)) {
+      console.warn('NPM Calculation - Invalid sale data detected:', sale);
+      return sum;
+    }
+    return sum + sale.totalPrice;
+  }, 0);
+  
+  const totalSalesQuantity = salesForDay.reduce((sum, sale) => {
+    // Use quantity if available, or calculate it from totalPrice/price if not
+    const quantity = sale.quantity !== undefined ? sale.quantity : (sale.price > 0 ? sale.totalPrice / sale.price : 0);
+    
+    // Handle invalid data
+    if (isNaN(quantity)) {
+      console.warn('NPM Calculation - Invalid sale quantity:', sale);
+      return sum;
+    }
+    return sum + quantity;
+  }, 0);
+  
+  // Calculate purchase ratio using quantity
+  const totalPurchasePrice = purchasesForDay.reduce((sum, purchase) => {
+    // Handle invalid data
+    if (isNaN(purchase.totalPrice)) {
+      console.warn('NPM Calculation - Invalid purchase data detected:', purchase);
+      return sum;
+    }
+    return sum + purchase.totalPrice;
+  }, 0);
+  
+  const totalPurchaseQuantity = purchasesForDay.reduce((sum, purchase) => {
+    // Use quantity if available, or calculate it from totalPrice/price if not
+    const quantity = purchase.quantity !== undefined ? purchase.quantity : (purchase.price > 0 ? purchase.totalPrice / purchase.price : 0);
+    
+    // Handle invalid data
+    if (isNaN(quantity)) {
+      console.warn('NPM Calculation - Invalid purchase quantity:', purchase);
+      return sum;
+    }
+    return sum + quantity;
+  }, 0);
+  
+  console.log('NPM Calculation - Intermediate values:', {
+    totalSalesPrice,
+    totalSalesQuantity,
+    totalPurchasePrice,
+    totalPurchaseQuantity
+  });
+  
+  // If we don't have sufficient data, return 0
+  if (totalSalesQuantity <= 0 || totalPurchaseQuantity <= 0) {
+    console.log('NPM Calculation - Insufficient data (division by zero), returning 0');
+    return 0;
+  }
+  
+  // Calculate the ratios
+  const salesRatio = totalSalesPrice / totalSalesQuantity;
+  const purchaseRatio = totalPurchasePrice / totalPurchaseQuantity;
+  
+  console.log('NPM Calculation - Ratios:', {
+    salesRatio,
+    purchaseRatio
+  });
+  
+  // Calculate profit margin and convert to percentage
+  const profitMargin = (salesRatio - purchaseRatio);
+  
+  // Handle extreme values
+  if (isNaN(profitMargin) || !isFinite(profitMargin)) {
+    console.log('NPM Calculation - Invalid profit margin result, returning 0');
+    return 0;
+  }
+  
+  console.log('NPM Calculation - Final result:', {
+    profitMargin: profitMargin,
+    formattedProfitMargin: parseFloat(profitMargin.toFixed(2))
+  });
+  
+  // Return the result with 2 decimal places
+  return parseFloat(profitMargin.toFixed(2));
+}

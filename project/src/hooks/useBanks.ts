@@ -7,18 +7,6 @@ export const useBanks = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Fallback bank options in case of error or during loading
-  const fallbackBanks: BankEntity[] = [
-    { id: 'idbi', name: 'IDBI', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 'indusind-ss', name: 'INDUSIND SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 'hdfc-caa-ss', name: 'HDFC CAA SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 'bob-ss', name: 'BOB SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 'canara-ss', name: 'CANARA SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 'hdfc-ss', name: 'HDFC SS', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 'indusind-blynk', name: 'INDUSIND BLYNK', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-    { id: 'pnb', name: 'PNB', isActive: true, createdAt: new Date(), updatedAt: new Date() },
-  ];
-
   useEffect(() => {
     const fetchBanks = async () => {
       try {
@@ -44,15 +32,10 @@ export const useBanks = () => {
             updatedAt: new Date(bank.updated_at || bank.created_at)
           }));
           setBanks(formattedBanks);
-        } else {
-          // If no banks found in the database, use fallback banks
-          setBanks(fallbackBanks);
         }
       } catch (err) {
         console.error('Error fetching banks:', err);
         setError(err instanceof Error ? err : new Error('Failed to fetch banks'));
-        // Use fallback banks on error
-        setBanks(fallbackBanks);
       } finally {
         setIsLoading(false);
       }
@@ -61,7 +44,7 @@ export const useBanks = () => {
     fetchBanks();
   }, []);
 
-  return { banks, isLoading, error, fallbackBanks };
+  return { banks, isLoading, error };
 };
 
 // Helper function to convert bank to select option format
