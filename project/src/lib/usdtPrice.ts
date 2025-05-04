@@ -1,9 +1,14 @@
 import axios from 'axios';
 import { supabase } from './supabase';
 
-const PRIMARY_API_BASE = 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1';
+// FX Rates API configuration
+const FX_RATES_API_URL = 'https://api.fxratesapi.com/latest';
+const FX_RATES_API_TOKEN = 'fxr_live_1fca18211461a24b164109be95c887124518';
+
+const CACHE_DURATION = import.meta.env.VITE_CACHE_DURATION; // ~65.5 minutes - allows for ~22 calls per day
+
+// Fallback API in case FX Rates fails
 const FALLBACK_API_BASE = 'https://latest.currency-api.pages.dev/v1';
-const CACHE_DURATION = 60000; // 1 minute in milliseconds
 
 interface CacheData {
   price: number;
@@ -12,34 +17,64 @@ interface CacheData {
 
 let priceCache: CacheData | null = null;
 
-// Function to fetch USD to INR price with fallback
-async function fetchFromUrl(url: string): Promise<number | null> {
+// Function to fetch USD to INR price from FX Rates API
+async function fetchFromFxRatesApi(): Promise<number | null> {
   try {
-    const response = await axios.get(url);
+    const response = await axios.get(FX_RATES_API_URL, {
+      params: {
+        base: 'USD',
+        currencies: 'INR',
+        resolution: 'hour', // Get hourly rates
+        format: 'json'
+      },
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${FX_RATES_API_TOKEN}`
+      }
+    });
+
+    // Check if response contains valid data
+    if (response.data && response.data.rates && response.data.rates.INR) {
+      return response.data.rates.INR;
+    }
+    
+    console.error('Invalid response from FX Rates API:', response.data);
+    return null;
+  } catch (error) {
+    console.error('Error fetching from FX Rates API:', error);
+    return null;
+  }
+}
+
+// Fallback function to fetch from alternative API if FX Rates fails
+async function fetchFromFallbackApi(): Promise<number | null> {
+  try {
+    const response = await axios.get(`${FALLBACK_API_BASE}/currencies/usd.json`);
     if (response.data?.usd?.inr) {
       return response.data.usd.inr;
     }
     return null;
   } catch (error) {
-    console.error(`Error fetching from ${url}:`, error);
+    console.error(`Error fetching from fallback API:`, error);
     return null;
   }
 }
 
 // Function to fetch current USD/INR price
 export async function fetchUsdtInrPrice(): Promise<number> {
-  // Check cache first
+  // Check cache first - only use if less than 1 hour old
   if (priceCache && Date.now() - priceCache.timestamp < CACHE_DURATION) {
     return priceCache.price;
   }
 
   try {
-    // Try primary URL first
-    let price = await fetchFromUrl(`${PRIMARY_API_BASE}/currencies/usd.json`);
+    // Try FX Rates API first
+    let price = await fetchFromFxRatesApi();
     
-    // If primary fails, try fallback URL
+    // If FX Rates API fails, try fallback
     if (!price) {
-      price = await fetchFromUrl(`${FALLBACK_API_BASE}/currencies/usd.json`);
+      console.warn('FX Rates API failed, trying fallback');
+      price = await fetchFromFallbackApi();
     }
 
     if (price) {
@@ -48,6 +83,8 @@ export async function fetchUsdtInrPrice(): Promise<number> {
         price,
         timestamp: Date.now()
       };
+      
+      console.log(`Updated USD-INR rate: ${price} at ${new Date().toLocaleString()}`);
       return price;
     }
 

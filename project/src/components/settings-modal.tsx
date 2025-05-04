@@ -60,7 +60,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onOpenChange }) => 
         startTransition(() => {
           autoFetchPrice();
         });
-      }, 60000); // Fetch every minute
+      }, 3930000); // ~65.5 minutes - allows for ~22 calls per day
       
       return () => clearInterval(interval);
     }
@@ -87,8 +87,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onOpenChange }) => 
   const handleRefreshPrice = () => {
     setIsLoading(true);
     try {
+      console.log("Manually refreshing USD-INR rate from FX Rates API...");
       startTransition(() => {
-        autoFetchPrice();
+        autoFetchPrice().then(() => {
+          alert("USD-INR rate updated successfully!");
+        }).catch(error => {
+          alert("Failed to update USD-INR rate. Check console for details.");
+          console.error(error);
+        });
       });
     } catch (error) {
       console.error('Error refreshing USD price:', error);
@@ -142,11 +148,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onOpenChange }) => 
                 variant="outline"
                 onClick={handleRefreshPrice}
                 disabled={isLoading || isPending}
-                title="Refresh live price"
+                title="Refresh USD-INR rate from FX Rates API"
               >
                 <RefreshCw className={`h-4 w-4 ${(isLoading || isPending) ? 'animate-spin' : ''}`} />
               </Button>
             </div>
+            <p className="text-xs text-gray-500 col-span-4 text-right">
+              Using FX Rates API - Updates automatically every hour
+            </p>
           </div>
           
           <div className="grid grid-cols-4 items-center gap-4">

@@ -136,8 +136,8 @@ export const liveUsdtPriceAtom = atom(
     const settings = get(settingsAtom);
     const now = Date.now();
     
-    // Only fetch new price if we haven't updated in the last minute
-    if (!settings.lastUsdtPriceUpdate || now - settings.lastUsdtPriceUpdate > 60000) {
+    // Only fetch new price if we haven't updated in the last ~65.5 minutes (3930000 ms)
+    if (!settings.lastUsdtPriceUpdate || now - settings.lastUsdtPriceUpdate > 3930000) {
       const price = await getUsdtPrice();
       if (price > 0) {
         return price;
