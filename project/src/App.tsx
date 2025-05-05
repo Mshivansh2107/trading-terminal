@@ -4,6 +4,7 @@ import { useAtom } from 'jotai';
 import { authStateAtom, initSupabaseSessionAtom } from './store/supabaseAuth';
 import { refreshDataAtom, syncSettingsAtom, autoFetchUsdPriceAtom, fetchBanksAtom, fetchPlatformsAtom } from './store/data';
 import { ToastProvider } from './components/ui/toast';
+import { checkAdminStatus } from './admin-debug';
 
 // Pages
 import Dashboard from './pages/dashboard';
@@ -44,10 +45,8 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/login" replace />;
   }
   
-  // Check if user has admin metadata
-  const isAdmin = authState.user?.app_metadata?.is_admin === true;
-  
-  if (!isAdmin) {
+  // Use the isAdmin property directly from authState
+  if (!authState.isAdmin) {
     return <Navigate to="/" replace />;
   }
   
@@ -152,15 +151,15 @@ function App() {
               } />
               
               <Route path="/analytics" element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <Analytics />
-                </ProtectedRoute>
+                </AdminRoute>
               } />
               
               <Route path="/stats" element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <Stats />
-                </ProtectedRoute>
+                </AdminRoute>
               } />
                 
                 {/* Admin Routes */}

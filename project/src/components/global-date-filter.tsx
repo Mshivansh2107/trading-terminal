@@ -182,7 +182,7 @@ const GlobalDateFilter = () => {
   };
 
   return (
-    <div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-2 pt-2 shadow-sm dark:bg-gray-900 dark:border-gray-800">
+    <div className="sticky top-0 z-10 bg-gray-800 border-b border-gray-700 pb-2 pt-2 shadow-sm">
       <div className="container mx-auto px-4 flex flex-wrap justify-between items-center gap-2">
         <div className="flex items-center gap-2 flex-wrap">
           <Button 
@@ -191,7 +191,7 @@ const GlobalDateFilter = () => {
             onClick={handleSetToday} 
             className={dateRange.isActive && isSameDay(parseISO(dateRange.startDate), startOfToday()) 
               ? 'bg-blue-100 border-blue-300 text-blue-700 hover:bg-blue-200 hover:text-blue-800 font-medium' 
-              : 'border-gray-300 text-white hover:bg-gray-100 hover:text-gray-900'}
+              : 'border-gray-600 text-white hover:bg-gray-700 hover:text-white'}
           >
             Today
           </Button>
@@ -199,7 +199,7 @@ const GlobalDateFilter = () => {
             variant="outline" 
             size="sm" 
             onClick={handleSetThisWeek}
-            className="border-gray-300 text-white hover:bg-gray-100 hover:text-gray-900"
+            className="border-gray-600 text-white hover:bg-gray-700 hover:text-white"
           >
             This Week
           </Button>
@@ -207,7 +207,7 @@ const GlobalDateFilter = () => {
             variant="outline" 
             size="sm" 
             onClick={handleSetThisMonth}
-            className="border-gray-300 text-white hover:bg-gray-100 hover:text-gray-900"
+            className="border-gray-600 text-white hover:bg-gray-700 hover:text-white"
           >
             This Month
           </Button>
@@ -215,7 +215,7 @@ const GlobalDateFilter = () => {
             variant="outline" 
             size="sm" 
             onClick={handleSetLastMonth}
-            className="border-gray-300 text-white hover:bg-gray-100 hover:text-gray-900"
+            className="border-gray-600 text-white hover:bg-gray-700 hover:text-white"
           >
             Last Month
           </Button>
@@ -225,7 +225,7 @@ const GlobalDateFilter = () => {
             onClick={toggleActive}
             className={dateRange.isActive 
               ? "ml-2 bg-blue-600 hover:bg-blue-700 text-white" 
-              : "ml-2 border-gray-300 text-white hover:bg-gray-100 hover:text-gray-900"}
+              : "ml-2 border-gray-600 text-white hover:bg-gray-700 hover:text-white"}
           >
             {dateRange.isActive ? "Filtering Active" : "Filtering Disabled"}
           </Button>
@@ -234,7 +234,7 @@ const GlobalDateFilter = () => {
             size="sm" 
             onClick={handleRefresh}
             disabled={isRefreshing} 
-            className="border-gray-300 text-white hover:bg-gray-100 hover:text-gray-900 ml-2"
+            className="border-gray-600 text-white hover:bg-gray-700 hover:text-white ml-2"
           >
             <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
             {isRefreshing ? "Refreshing..." : "Refresh"}
@@ -242,10 +242,10 @@ const GlobalDateFilter = () => {
         </div>
         
         <div className="flex items-center gap-2">
-          <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <div className="text-sm font-medium text-white">
             {dateRange.isActive ? (
               <span className="flex items-center">
-                <CalendarIcon className="inline-block mr-1 h-4 w-4 text-gray-500" />
+                <CalendarIcon className="inline-block mr-1 h-4 w-4 text-gray-300" />
                 {dateRangeDisplay}
               </span>
             ) : (

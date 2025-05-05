@@ -1,6 +1,7 @@
 import { atom } from 'jotai';
 import { supabase } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
+import { checkIsUserAdmin } from '../lib/supabaseAdmin';
 
 // Types
 export interface AuthState {
@@ -8,6 +9,7 @@ export interface AuthState {
   session: Session | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isAdmin: boolean;
   error: string | null;
 }
 
@@ -17,6 +19,7 @@ const initialState: AuthState = {
   session: null,
   isLoading: false,
   isAuthenticated: false,
+  isAdmin: false,
   error: null,
 };
 
@@ -37,13 +40,27 @@ export const initSupabaseSessionAtom = atom(
       const { session } = data;
       const isAuthenticated = !!session;
       
-      set(authStateAtom, {
-        user: session?.user || null,
-        session,
-        isLoading: false,
-        isAuthenticated,
-        error: null,
-      });
+      if (isAuthenticated && session?.user) {
+        const isAdmin = await checkIsUserAdmin(session.user.id);
+        
+        set(authStateAtom, {
+          user: session.user,
+          session,
+          isLoading: false,
+          isAuthenticated,
+          isAdmin,
+          error: null,
+        });
+      } else {
+        set(authStateAtom, {
+          user: null,
+          session: null,
+          isLoading: false,
+          isAuthenticated: false,
+          isAdmin: false,
+          error: null,
+        });
+      }
     } catch (error) {
       set(authStateAtom, {
         ...initialState,
@@ -68,11 +85,17 @@ export const signInWithEmailAtom = atom(
       
       if (error) throw error;
       
+      let isAdmin = false;
+      if (data.user) {
+        isAdmin = await checkIsUserAdmin(data.user.id);
+      }
+      
       set(authStateAtom, {
         user: data.user,
         session: data.session,
         isLoading: false,
         isAuthenticated: true,
+        isAdmin,
         error: null,
       });
       
