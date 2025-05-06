@@ -32,6 +32,7 @@ import {
   formatDateByRangeAtom
 } from './filters';
 import { formatDate } from '../lib/utils';
+import { startOfDay, endOfDay, isWithinInterval } from 'date-fns';
 
 // Initial data store
 export const salesAtom = atomWithStorage<SalesEntry[]>('salesData', []);
@@ -39,6 +40,9 @@ export const purchasesAtom = atomWithStorage<PurchaseEntry[]>('purchasesData', [
 export const transfersAtom = atomWithStorage<TransferEntry[]>('transfersData', []);
 export const bankTransfersAtom = atomWithStorage<BankTransferEntry[]>('bankTransfersData', []);
 export const expensesAtom = atomWithStorage<ExpenseEntry[]>('expensesData', []);
+
+// Create a data version atom to force UI updates when data changes
+export const dataVersionAtom = atom<number>(0);
 
 // Settings
 export const settingsAtom = atomWithStorage('appSettings', {
@@ -193,41 +197,30 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   
   // Calculate NPM instead of simple percentage margin
   const currentMargin = (() => {
-    // Group sales by totalPrice and quantity
-    const totalSalesPrice = filteredSales.reduce((sum, sale) => sum + sale.totalPrice, 0);
-    const totalSalesQuantity = filteredSales.reduce((sum, sale) => sum + sale.quantity, 0);
+    // Use the exact same NPM calculation method as Today's Profit Widget
+    // First get today's date range
+    const today = new Date();
+    const todayStart = startOfDay(today);
+    const todayEnd = endOfDay(today);
     
-    // Group purchases by totalPrice and quantity
-    const totalPurchasePrice = filteredPurchases.reduce((sum, purchase) => sum + purchase.totalPrice, 0);
-    const totalPurchaseQuantity = filteredPurchases.reduce((sum, purchase) => sum + purchase.quantity, 0);
-    
-    console.log('Current NPM calculation for dashboard:', {
-      totalSalesPrice,
-      totalSalesQuantity,
-      totalPurchasePrice,
-      totalPurchaseQuantity,
-      hasSufficientData: (totalSalesQuantity > 0 && totalPurchaseQuantity > 0) ? 'Yes' : 'No'
+    // Filter today's sales and purchases - exactly as in Today's Profit Widget
+    const todaySales = filteredSales.filter(sale => {
+      const saleDate = new Date(sale.createdAt);
+      return isWithinInterval(saleDate, { start: todayStart, end: todayEnd });
     });
     
-    // If we don't have sufficient data, return 0
-    if (totalSalesQuantity <= 0 || totalPurchaseQuantity <= 0) {
-      console.log('Insufficient data for NPM calculation, returning 0');
-      return 0;
-    }
-    
-    // Calculate the ratios
-    const salesRatio = totalSalesPrice / totalSalesQuantity;
-    const purchaseRatio = totalPurchasePrice / totalPurchaseQuantity;
-    
-    // Calculate NPM
-    const npmValue = salesRatio - purchaseRatio;
-    console.log('NPM calculation complete:', {
-      salesRatio,
-      purchaseRatio,
-      npmValue: parseFloat(npmValue.toFixed(2))
+    const todayPurchases = filteredPurchases.filter(purchase => {
+      const purchaseDate = new Date(purchase.createdAt);
+      return isWithinInterval(purchaseDate, { start: todayStart, end: todayEnd });
     });
     
-    return parseFloat(npmValue.toFixed(2));
+    console.log('Dashboard Current Margin (Today\'s NPM) calculation:', {
+      todaySalesCount: todaySales.length,
+      todayPurchasesCount: todayPurchases.length
+    });
+    
+    // Use the exact same calculation function as Today's Profit Widget
+    return calculateDailyProfitMargin(todaySales, todayPurchases);
   })();
   
   // For stock calculations, we need to handle differently, as stock is cumulative:
@@ -268,27 +261,196 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   // Similarly calculate cash balances up to the filter end date
   const calculateAdjustedBankBalance = (bank: Bank) => {
     if (!isFilterActive) {
+      // Get all bank transfers
+      const bankTransfers = get(bankTransfersAtom);
+      
+      // Calculate transfers in (money received)
+      // Filter out transfers from ADJUSTMENT as they are handled separately
+      const transfersIn = bankTransfers
+        .filter(transfer => transfer.toBank === bank && transfer.fromBank !== 'ADJUSTMENT')
+        .reduce((sum, transfer) => sum + transfer.amount, 0);
+      
+      // Calculate transfers out (money sent)
+      // Filter out transfers to ADJUSTMENT as they are handled separately
+      const transfersOut = bankTransfers
+        .filter(transfer => transfer.fromBank === bank && transfer.toBank !== 'ADJUSTMENT')
+        .reduce((sum, transfer) => sum + transfer.amount, 0);
+      
+      // Handle special ADJUSTMENT transfers
+      // Add adjustment transfers in (manual additions)
+      const adjustmentTransfersIn = bankTransfers
+        .filter(transfer => transfer.fromBank === 'ADJUSTMENT' && transfer.toBank === bank)
+        .reduce((sum, transfer) => sum + transfer.amount, 0);
+      
+      // Subtract adjustment transfers out (manual reductions)
+      const adjustmentTransfersOut = bankTransfers
+        .filter(transfer => transfer.fromBank === bank && transfer.toBank === 'ADJUSTMENT')
+        .reduce((sum, transfer) => sum + transfer.amount, 0);
+      
       return (
         sales.filter(s => s.bank === bank).reduce((sum, s) => sum + s.totalPrice, 0) -
         purchases.filter(p => p.bank === bank).reduce((sum, p) => sum + p.totalPrice, 0) +
         expenses.filter(e => e.bank === bank && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
-        expenses.filter(e => e.bank === bank && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0)
+        expenses.filter(e => e.bank === bank && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) +
+        transfersIn - transfersOut + adjustmentTransfersIn - adjustmentTransfersOut
       );
     } else {
-      const { endDate } = get(dateRangeAtom);
+      // For date-filtered view, we need to consider:
+      // 1. The starting balance (all transactions BEFORE the start date)
+      // 2. Transactions within the selected date range (between start and end dates)
+      const { startDate, endDate } = get(dateRangeAtom);
+      const startDateTime = new Date(startDate).setHours(0, 0, 0, 0);
       const endDateTime = new Date(endDate).setHours(23, 59, 59, 999);
       
-      // Include all transactions up to end date
-      return (
-        sales.filter(s => s.bank === bank && new Date(s.createdAt).getTime() <= endDateTime)
-          .reduce((sum, s) => sum + s.totalPrice, 0) -
-        purchases.filter(p => p.bank === bank && new Date(p.createdAt).getTime() <= endDateTime)
-          .reduce((sum, p) => sum + p.totalPrice, 0) +
-        expenses.filter(e => e.bank === bank && e.type === 'income' && new Date(e.createdAt).getTime() <= endDateTime)
-          .reduce((sum, e) => sum + e.amount, 0) -
-        expenses.filter(e => e.bank === bank && e.type === 'expense' && new Date(e.createdAt).getTime() <= endDateTime)
-          .reduce((sum, e) => sum + e.amount, 0)
-      );
+      // Get all bank transfers
+      const bankTransfers = get(bankTransfersAtom);
+      
+      // Calculate starting balance (all transactions before the start date)
+      // Sales before start date
+      const salesBeforeStart = sales
+        .filter(s => s.bank === bank && new Date(s.createdAt).getTime() < startDateTime)
+        .reduce((sum, s) => sum + s.totalPrice, 0);
+      
+      // Purchases before start date
+      const purchasesBeforeStart = purchases
+        .filter(p => p.bank === bank && new Date(p.createdAt).getTime() < startDateTime)
+        .reduce((sum, p) => sum + p.totalPrice, 0);
+      
+      // Income before start date
+      const incomeBeforeStart = expenses
+        .filter(e => e.bank === bank && e.type === 'income' && new Date(e.createdAt).getTime() < startDateTime)
+        .reduce((sum, e) => sum + e.amount, 0);
+      
+      // Expenses before start date
+      const expensesBeforeStart = expenses
+        .filter(e => e.bank === bank && e.type === 'expense' && new Date(e.createdAt).getTime() < startDateTime)
+        .reduce((sum, e) => sum + e.amount, 0);
+      
+      // Regular transfers before start date
+      const transfersInBeforeStart = bankTransfers
+        .filter(t => 
+          t.toBank === bank && 
+          t.fromBank !== 'ADJUSTMENT' && 
+          new Date(t.createdAt).getTime() < startDateTime
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const transfersOutBeforeStart = bankTransfers
+        .filter(t => 
+          t.fromBank === bank && 
+          t.toBank !== 'ADJUSTMENT' && 
+          new Date(t.createdAt).getTime() < startDateTime
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      // Adjustment transfers before start date
+      const adjustmentTransfersInBeforeStart = bankTransfers
+        .filter(t => 
+          t.fromBank === 'ADJUSTMENT' &&
+          t.toBank === bank && 
+          new Date(t.createdAt).getTime() < startDateTime
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const adjustmentTransfersOutBeforeStart = bankTransfers
+        .filter(t => 
+          t.fromBank === bank &&
+          t.toBank === 'ADJUSTMENT' && 
+          new Date(t.createdAt).getTime() < startDateTime
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      // Calculate starting balance
+      const startingBalance = salesBeforeStart - purchasesBeforeStart + 
+                             incomeBeforeStart - expensesBeforeStart +
+                             transfersInBeforeStart - transfersOutBeforeStart +
+                             adjustmentTransfersInBeforeStart - adjustmentTransfersOutBeforeStart;
+      
+      // Calculate transactions within the date range
+      // Sales within range
+      const salesInRange = sales
+        .filter(s => 
+          s.bank === bank && 
+          new Date(s.createdAt).getTime() >= startDateTime &&
+          new Date(s.createdAt).getTime() <= endDateTime
+        )
+        .reduce((sum, s) => sum + s.totalPrice, 0);
+      
+      // Purchases within range
+      const purchasesInRange = purchases
+        .filter(p => 
+          p.bank === bank && 
+          new Date(p.createdAt).getTime() >= startDateTime &&
+          new Date(p.createdAt).getTime() <= endDateTime
+        )
+        .reduce((sum, p) => sum + p.totalPrice, 0);
+      
+      // Income within range
+      const incomeInRange = expenses
+        .filter(e => 
+          e.bank === bank && 
+          e.type === 'income' && 
+          new Date(e.createdAt).getTime() >= startDateTime &&
+          new Date(e.createdAt).getTime() <= endDateTime
+        )
+        .reduce((sum, e) => sum + e.amount, 0);
+      
+      // Expenses within range
+      const expensesInRange = expenses
+        .filter(e => 
+          e.bank === bank && 
+          e.type === 'expense' && 
+          new Date(e.createdAt).getTime() >= startDateTime &&
+          new Date(e.createdAt).getTime() <= endDateTime
+        )
+        .reduce((sum, e) => sum + e.amount, 0);
+      
+      // Regular transfers within range
+      const transfersInRange = bankTransfers
+        .filter(t => 
+          t.toBank === bank &&
+          t.fromBank !== 'ADJUSTMENT' && 
+          new Date(t.createdAt).getTime() >= startDateTime &&
+          new Date(t.createdAt).getTime() <= endDateTime
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const transfersOutRange = bankTransfers
+        .filter(t => 
+          t.fromBank === bank &&
+          t.toBank !== 'ADJUSTMENT' && 
+          new Date(t.createdAt).getTime() >= startDateTime &&
+          new Date(t.createdAt).getTime() <= endDateTime
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      // Adjustment transfers within range
+      const adjustmentTransfersInRange = bankTransfers
+        .filter(t => 
+          t.fromBank === 'ADJUSTMENT' &&
+          t.toBank === bank && 
+          new Date(t.createdAt).getTime() >= startDateTime &&
+          new Date(t.createdAt).getTime() <= endDateTime
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      const adjustmentTransfersOutRange = bankTransfers
+        .filter(t => 
+          t.fromBank === bank &&
+          t.toBank === 'ADJUSTMENT' && 
+          new Date(t.createdAt).getTime() >= startDateTime &&
+          new Date(t.createdAt).getTime() <= endDateTime
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      // Calculate balance within range
+      const rangeBalance = salesInRange - purchasesInRange + 
+                           incomeInRange - expensesInRange +
+                           transfersInRange - transfersOutRange +
+                           adjustmentTransfersInRange - adjustmentTransfersOutRange;
+      
+      // Return starting balance + transactions within range
+      return startingBalance + rangeBalance;
     }
   };
   
@@ -300,26 +462,47 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
     ? availableBanks.filter(bank => bank.isActive).map(bank => bank.name as Bank)
     : []; // No default banks - wait for backend data
   
-  // Generate cash list for all banks
-  const cashList = bankNames.map(bankName => {
-    return { 
-      bank: bankName, 
-      amount: calculateAdjustedBankBalance(bankName) 
-    };
-  });
+  // Define banks that should not be shown in UI or included in calculations
+  const excludedBanks: string[] = ['ADJUSTMENT'];
+  
+  // Generate cash list for all banks except excluded ones
+  const cashList = bankNames
+    .filter(bankName => !excludedBanks.includes(bankName))
+    .map(bankName => {
+      return { 
+        bank: bankName, 
+        amount: calculateAdjustedBankBalance(bankName) 
+      };
+    });
   
   // Get current USDT price for stock value calculation
   const currentUsdPrice = settings.currentUsdPrice || 0;
   
   // Calculate net cash (sum of bank balances)
   const bankBalanceTotal = cashList.reduce((total, cash) => total + cash.amount, 0);
-  const netCash = netSales - netPurchases + netIncomes - netExpenses;
+  
+  // Calculate total bank balances (sum of all bank balances, positive and negative)
+  const totalBankBalances = bankBalanceTotal;
+  
+  // Calculate net cash from actual bank balances instead of transaction totals
+  // This ensures consistency with the individual bank balances shown
+  const netCash = bankBalanceTotal;
+  
+  // Calculate total stock balances (sum of all stock quantities)
+  const totalStockBalances = stockList
+    .filter(stock => stock.platform !== 'ADJUSTMENT') // Exclude ADJUSTMENT platform
+    .reduce((total, stock) => total + stock.quantity, 0);
   
   // Calculate total value of stock in USDT
   const totalStockValue = stockList.reduce((total, stock) => total + (stock.quantity * currentUsdPrice), 0);
   
-  // Total cash is sum of bank balances plus stock value converted to INR
-  const totalCash = bankBalanceTotal + totalStockValue;
+  // Convert stock value from USDT to local currency (INR) for proper total calculation
+  // currentUsdPrice represents the local currency value of 1 USDT
+  const stockValueInLocalCurrency = totalStockValue * currentUsdPrice;
+  
+  // Total cash is sum of bank balances (already in local currency) plus stock value converted to local currency
+  // Formula: total bank balances + (total stock balances × current USD price)
+  const totalCash = totalBankBalances + (totalStockBalances * currentUsdPrice);
   
   // Calculate average prices from filtered transactions
   const salesTransactions = filteredSales.length > 0 ? filteredSales : [];
@@ -360,9 +543,12 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   // Sum all bank balances, except those that can be manually edited
   // Banks that are used for manual adjustments should be excluded
   const manuallyEditableBanks: string[] = [
-    'ADJUSTMENT', 
+    ...excludedBanks, // Include all excluded banks (like ADJUSTMENT)
     // Add any other banks that should be excluded from the "net cash after sales" calculation
     // These are typically banks that might have been manually edited to adjust balances
+    'CASH', // Assuming CASH might be manually adjusted
+    'PETTY CASH', // Assuming there might be a petty cash account
+    // Add any other banks here that have been manually added/adjusted in your system
   ];
   
   const netCashAfterSales = cashList
@@ -385,6 +571,8 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
     requiredMargin,
     netCash,
     netCashAfterSales,
+    totalBankBalances, // Add this new property
+    totalStockBalances, // Add this new property 
     salesByBank: cashList.map(cash => ({
       bank: cash.bank,
       total: cash.amount
@@ -793,6 +981,10 @@ export const addSaleAtom = atom(
     // Save to local storage via jotai
     set(salesAtom, [...sales, saleWithId as SalesEntry]);
     
+    // Increment data version to trigger UI updates
+    const currentVersion = get(dataVersionAtom);
+    set(dataVersionAtom, currentVersion + 1);
+    
     // Save to Supabase
     try {
       const { data, error } = await supabase
@@ -842,6 +1034,10 @@ export const addPurchaseAtom = atom(
     // Save to local storage via jotai
     set(purchasesAtom, [...purchases, purchaseWithId as PurchaseEntry]);
     
+    // Increment data version to trigger UI updates
+    const currentVersion = get(dataVersionAtom);
+    set(dataVersionAtom, currentVersion + 1);
+    
     // Save to Supabase
     try {
       const { data, error } = await supabase
@@ -890,6 +1086,10 @@ export const addTransferAtom = atom(
     // Save to local storage via jotai
     set(transfersAtom, [...transfers, transferWithId as TransferEntry]);
     
+    // Increment data version to trigger UI updates
+    const currentVersion = get(dataVersionAtom);
+    set(dataVersionAtom, currentVersion + 1);
+    
     // Save to Supabase
     try {
       const { data, error } = await supabase
@@ -926,10 +1126,15 @@ export const addBankTransferAtom = atom(
       ...newTransfer,
       id: crypto.randomUUID(),
       createdAt: new Date(),
+      createdBy: authState.user?.email || 'Unknown user',
     };
     
     // Save to local storage via jotai
     set(bankTransfersAtom, [...transfers, transferWithId as BankTransferEntry]);
+    
+    // Increment data version to trigger UI updates
+    const currentVersion = get(dataVersionAtom);
+    set(dataVersionAtom, currentVersion + 1);
     
     // Save to Supabase
     try {
@@ -945,7 +1150,8 @@ export const addBankTransferAtom = atom(
           reference: transferWithId.reference,
           created_at: transferWithId.createdAt.toISOString(),
           user_id: authState.user?.id || null,
-          username: authState.user?.email || null
+          username: authState.user?.email || null,
+          created_by: authState.user?.email || 'Unknown user'
         });
       
       if (error) {
@@ -974,7 +1180,11 @@ export const addExpenseAtom = atom(
     
     // Add to local state
     set(expensesAtom, [...expenses, newExpense]);
-
+    
+    // Increment data version to trigger UI updates
+    const currentVersion = get(dataVersionAtom);
+    set(dataVersionAtom, currentVersion + 1);
+    
     // Save to Supabase
     try {
       const { error } = await supabase
@@ -1131,6 +1341,10 @@ export const refreshDataAtom = atom(
     }
     
     try {
+      // Increment data version to trigger UI updates
+      const currentVersion = get(dataVersionAtom);
+      set(dataVersionAtom, currentVersion + 1);
+      
       // Fetch banks and platforms
       set(fetchBanksAtom);
       set(fetchPlatformsAtom);
@@ -1226,7 +1440,7 @@ export const refreshDataAtom = atom(
       // Fetch bank transfers
       const { data: bankTransfersData, error: bankTransfersError } = await supabase
         .from('bank_transfers')
-        .select('*, edited_by, updated_at')
+        .select('*, edited_by, updated_at, created_by')
         .order('created_at', { ascending: false });
       
       if (bankTransfersError) {
@@ -1243,7 +1457,8 @@ export const refreshDataAtom = atom(
           reference: transfer.reference,
           createdAt: new Date(transfer.created_at),
           updatedAt: transfer.updated_at ? new Date(transfer.updated_at) : undefined,
-          editedBy: transfer.edited_by || undefined
+          editedBy: transfer.edited_by || undefined,
+          createdBy: transfer.created_by || transfer.username || 'Unknown user' // Add createdBy mapping
         }));
         
         set(bankTransfersAtom, formattedBankTransfers);
@@ -1313,6 +1528,10 @@ export const updateSaleAtom = atom(
     set(salesAtom, sales.map(sale => 
       sale.id === updatedSale.id ? updatedSale : sale
     ));
+    
+    // Increment data version to trigger UI updates
+    const currentVersion = get(dataVersionAtom);
+    set(dataVersionAtom, currentVersion + 1);
     
     // Update in Supabase
     try {
@@ -1430,9 +1649,21 @@ export const updateBankTransferAtom = atom(
     const transfers = get(bankTransfersAtom);
     const authState = get(authStateAtom);
     
+    // Find the existing transfer to preserve createdBy
+    const existingTransfer = transfers.find(t => t.id === updatedTransfer.id);
+    
+    // Add editedBy and updatedAt fields while preserving createdBy
+    const now = new Date();
+    const transferWithEditInfo = {
+      ...updatedTransfer,
+      createdBy: existingTransfer?.createdBy || updatedTransfer.createdBy || 'Unknown user', // Preserve createdBy
+      editedBy: authState.user?.email || 'Unknown user',
+      updatedAt: now
+    };
+    
     // Update in local storage via jotai
     set(bankTransfersAtom, transfers.map(transfer => 
-      transfer.id === updatedTransfer.id ? updatedTransfer : transfer
+      transfer.id === transferWithEditInfo.id ? transferWithEditInfo : transfer
     ));
     
     // Update in Supabase
@@ -1440,16 +1671,17 @@ export const updateBankTransferAtom = atom(
       const { data, error } = await supabase
         .from('bank_transfers')
         .update({
-          from_bank: updatedTransfer.fromBank,
-          from_account: updatedTransfer.fromAccount,
-          to_bank: updatedTransfer.toBank,
-          to_account: updatedTransfer.toAccount,
-          amount: updatedTransfer.amount,
-          reference: updatedTransfer.reference,
-          edited_by: authState.user?.email || null,
-          updated_at: new Date().toISOString()
+          from_bank: transferWithEditInfo.fromBank,
+          from_account: transferWithEditInfo.fromAccount,
+          to_bank: transferWithEditInfo.toBank,
+          to_account: transferWithEditInfo.toAccount,
+          amount: transferWithEditInfo.amount,
+          reference: transferWithEditInfo.reference,
+          created_by: transferWithEditInfo.createdBy, // Include created_by in the update
+          edited_by: transferWithEditInfo.editedBy,
+          updated_at: transferWithEditInfo.updatedAt.toISOString()
         })
-        .eq('id', updatedTransfer.id);
+        .eq('id', transferWithEditInfo.id);
       
       if (error) {
         console.error('Error updating in Supabase:', error);

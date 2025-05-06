@@ -167,7 +167,18 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    
+    // For bank transfers, ensure the account fields use 'Main' as default
+    let dataToSave = formData;
+    if (type === 'bankTransfer') {
+      dataToSave = {
+        ...formData,
+        fromAccount: 'Main',
+        toAccount: 'Main'
+      };
+    }
+    
+    onSave(dataToSave);
     onOpenChange(false);
   };
 
@@ -390,18 +401,6 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 />
               </div>
               
-              <FormField
-                label="From Account"
-                name="fromAccount"
-                type="select"
-                required
-                options={accounts}
-                inputProps={{
-                  value: formData.fromAccount || '',
-                  onChange: handleChange
-                }}
-              />
-              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   To Bank
@@ -419,18 +418,6 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                   required
                 />
               </div>
-              
-              <FormField
-                label="To Account"
-                name="toAccount"
-                type="select"
-                required
-                options={accounts}
-                inputProps={{
-                  value: formData.toAccount || '',
-                  onChange: handleChange
-                }}
-              />
               
               <FormField
                 label="Amount"

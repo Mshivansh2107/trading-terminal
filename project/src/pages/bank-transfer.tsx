@@ -30,9 +30,9 @@ const BankTransfer = () => {
     const formData = new FormData(e.currentTarget);
     const newBankTransfer = {
       fromBank: formData.get('fromBank') as string,
-      fromAccount: formData.get('fromAccount') as string,
+      fromAccount: 'Main', // Use 'Main' as default value
       toBank: formData.get('toBank') as string,
-      toAccount: formData.get('toAccount') as string,
+      toAccount: 'Main', // Use 'Main' as default value
       amount: parseFloat(formData.get('amount') as string),
       reference: formData.get('reference') as string || undefined,
       createdBy: '' // The actual value will be set by the addBankTransferAtom
@@ -211,27 +211,11 @@ const BankTransfer = () => {
                 />
                 
                 <FormField
-                  label="From Account"
-                  name="fromAccount"
-                  type="select"
-                  required
-                  options={accounts}
-                />
-                
-                <FormField
                   label="To Bank"
                   name="toBank"
                   type="select"
                   required
                   options={bankOptions}
-                />
-                
-                <FormField
-                  label="To Account"
-                  name="toAccount"
-                  type="select"
-                  required
-                  options={accounts}
                 />
                 
                 <FormField

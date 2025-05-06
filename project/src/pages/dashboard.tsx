@@ -21,7 +21,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { dashboardDataAtom, refreshDataAtom, statsDataAtom, settingsAtom, salesAtom, purchasesAtom, transfersAtom, updateStockBalanceAtom, updateCashBalanceAtom, banksAtom, platformsAtom } from '../store/data';
+import { dashboardDataAtom, refreshDataAtom, statsDataAtom, settingsAtom, salesAtom, purchasesAtom, transfersAtom, updateStockBalanceAtom, updateCashBalanceAtom, banksAtom, platformsAtom, dataVersionAtom } from '../store/data';
 import DashboardCard from '../components/layout/dashboard-card';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { formatCurrency, formatQuantity, prepareExportData } from '../lib/utils';
@@ -35,7 +35,11 @@ import {
   Download,
   Edit,
   Plus,
-  Maximize2
+  Maximize2,
+  Copy,
+  Image,
+  MoreHorizontal,
+  Printer
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { authStateAtom } from '../store/supabaseAuth';
@@ -51,6 +55,14 @@ import DateRangeFilter from '../components/date-range-filter';
 import { dateRangeAtom, isSingleDaySelectionAtom, formatDateByRangeAtom } from '../store/filters';
 import { PlatformSelector } from '../components/ui/platform-selector';
 import { Legend } from 'recharts';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuLabel, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from '../components/ui/dropdown-menu';
 
 const Dashboard = () => {
   const [dashboardData] = useAtom(dashboardDataAtom);
@@ -68,6 +80,7 @@ const Dashboard = () => {
   const [purchases] = useAtom(purchasesAtom);
   const [transfers] = useAtom(transfersAtom);
   const [banks] = useAtom(banksAtom);
+  const [dataVersion] = useAtom(dataVersionAtom);
   const [isExporting, setIsExporting] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const tooltipTimeoutRef = useRef<NodeJS.Timeout>();
@@ -76,7 +89,9 @@ const Dashboard = () => {
   // Refs for chart containers
   const salesChartRef = useRef<HTMLDivElement>(null);
   const stockChartRef = useRef<HTMLDivElement>(null);
-  const cashChartRef = useRef<HTMLDivElement>(null);
+  const cashChartRef = useRef<HTMLDivElement>(null); // Overview tab cash chart
+  const cashTabChartRef = useRef<HTMLDivElement>(null); // Cash tab cash chart
+  const enlargedChartRef = useRef<HTMLDivElement>(null); // Enlarged chart modal
   
   // Generate colors for charts
   const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1', '#F97316'];
@@ -92,42 +107,74 @@ const Dashboard = () => {
   const handleRefresh = async () => {
     setIsLoading(true);
     try {
+      console.log("Starting data refresh...");
+      // Force a complete data refresh from the server
       await refreshData();
+      
+      // The dataVersionAtom will be incremented, which will trigger a UI update
+      console.log("Data refresh complete, dataVersion:", dataVersion);
+      
+      // Brief delay to ensure state updates are processed
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } catch (error) {
+      console.error("Error refreshing data:", error);
+      alert("Failed to refresh data. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Function to capture chart as image
+  // Improve the captureChart function to be more robust
   const captureChart = async (ref: React.RefObject<HTMLDivElement>, chartName: string): Promise<Blob | null> => {
     if (!ref.current) return null;
     
     try {
       // Store original styles
-      const originalWidth = ref.current.style.width;
-      const originalHeight = ref.current.style.height;
+      const originalStyles = {
+        width: ref.current.style.width,
+        height: ref.current.style.height,
+        position: ref.current.style.position,
+        overflow: ref.current.style.overflow,
+        zIndex: ref.current.style.zIndex
+      };
       
       // Set capturing state
       setIsCapturing(true);
       
-      // Temporarily increase size for higher resolution
-      ref.current.style.width = '1920px';
-      ref.current.style.height = '1080px';
-
-      // Wait for next render cycle
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Create a clone of the original element to avoid modifying the visible UI
+      const clone = ref.current.cloneNode(true) as HTMLDivElement;
       
-      const canvas = await html2canvas(ref.current, {
+      // Style the clone for optimal rendering
+      clone.style.position = 'absolute';
+      clone.style.left = '-9999px';
+      clone.style.top = '-9999px';
+      clone.style.width = '1200px'; // Use consistent size for export
+      clone.style.height = '800px';
+      clone.style.zIndex = '-1000';
+      clone.style.overflow = 'visible';
+      
+      // Temporarily append to body
+      document.body.appendChild(clone);
+      
+      // Wait for next render cycle
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Capture the clone instead of the original
+      const canvas = await html2canvas(clone, {
         logging: false,
         useCORS: true,
-        allowTaint: true
+        allowTaint: true,
+        backgroundColor: 'white',
+        scale: 2, // Higher resolution
+        width: 1200,
+        height: 800
       });
       
-      // Restore original styles
-      ref.current.style.width = originalWidth;
-      ref.current.style.height = originalHeight;
+      // Clean up
+      document.body.removeChild(clone);
       setIsCapturing(false);
       
+      // Convert canvas to blob
       return new Promise(resolve => {
         canvas.toBlob((blob: Blob | null) => {
           resolve(blob);
@@ -157,7 +204,8 @@ const Dashboard = () => {
       const charts = [
         { ref: salesChartRef, name: 'sales_chart' },
         { ref: stockChartRef, name: 'stock_chart' },
-        { ref: cashChartRef, name: 'cash_chart' }
+        { ref: cashChartRef, name: 'overview_cash_chart' }, 
+        { ref: cashTabChartRef, name: 'cash_tab_chart' }
       ];
       
       for (const chart of charts) {
@@ -234,6 +282,13 @@ const Dashboard = () => {
     
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Refresh data when data version changes
+  useEffect(() => {
+    if (dataVersion > 0) {
+      console.log(`Data version changed to ${dataVersion}, UI will update with new data`);
+    }
+  }, [dataVersion]);
 
   // Refresh data when date range changes
   useEffect(() => {
@@ -489,6 +544,283 @@ const Dashboard = () => {
     }
   };
 
+  // Add automated polling for data refresh
+  useEffect(() => {
+    // Check if user is authenticated before setting up polling
+    if (!authState.isAuthenticated) {
+      return;
+    }
+    
+    console.log("Setting up auto-refresh polling");
+    
+    // Set up polling interval (refresh every 30 seconds)
+    const polling = setInterval(() => {
+      console.log("Auto-refresh: Polling for new data...");
+      refreshData().catch(error => {
+        console.error("Error during auto-refresh:", error);
+      });
+    }, 30000); // 30 seconds
+    
+    // Clean up interval on unmount
+    return () => {
+      console.log("Cleaning up auto-refresh polling");
+      clearInterval(polling);
+    };
+  }, [authState.isAuthenticated, refreshData]);
+
+  // Update the handleDownloadChart function to handle different formats
+  const handleDownloadChart = async (chartRef: React.RefObject<HTMLDivElement>, filename: string, format: 'png' | 'clipboard' = 'png') => {
+    try {
+      setIsCapturing(true);
+      const blob = await captureChart(chartRef, filename);
+      
+      if (!blob) return;
+      
+      if (format === 'clipboard') {
+        try {
+          // Create image data from blob for clipboard
+          const imageData = await createImageBitmap(blob);
+          
+          // Try to copy to clipboard - this requires secure context
+          if (navigator.clipboard && window.ClipboardItem) {
+            const item = new ClipboardItem({
+              'image/png': blob
+            });
+            await navigator.clipboard.write([item]);
+            // Show toast or notification
+            alert('Chart copied to clipboard!');
+          } else {
+            // Fallback for browsers without clipboard API support
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            alert('Your browser does not support clipboard images. Chart downloaded instead.');
+          }
+        } catch (clipboardError) {
+          console.error('Clipboard error:', clipboardError);
+          // Fallback to download
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
+      } else {
+        // Download as file
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error('Error processing chart:', error);
+      alert('Failed to export chart. Please try again.');
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  // Add print chart function
+  const handlePrintChart = async (chartRef: React.RefObject<HTMLDivElement>, title: string) => {
+    try {
+      setIsCapturing(true);
+      const blob = await captureChart(chartRef, 'print.png');
+      if (!blob) return;
+      
+      // Create a new window for printing
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('Pop-up blocked. Please allow pop-ups and try again.');
+        return;
+      }
+      
+      // Convert blob to data URL
+      const reader = new FileReader();
+      reader.onloadend = function() {
+        const dataUrl = reader.result as string;
+        
+        // Get current date for footer
+        const now = new Date();
+        const dateString = now.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+        const timeString = now.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: 'numeric'
+        });
+        
+        // Write HTML content to the new window
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Print Chart - ${title}</title>
+              <style>
+                body {
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  justify-content: flex-start;
+                  padding: 20px;
+                  font-family: Arial, sans-serif;
+                  background-color: white;
+                  color: #333;
+                }
+                .print-container {
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  width: 100%;
+                  max-width: 1000px;
+                  margin: 0 auto;
+                }
+                .header {
+                  width: 100%;
+                  text-align: center;
+                  margin-bottom: 20px;
+                  padding-bottom: 10px;
+                  border-bottom: 1px solid #e0e0e0;
+                }
+                h1 {
+                  font-size: 24px;
+                  margin-bottom: 10px;
+                  color: #1e293b;
+                }
+                .logo {
+                  font-size: 14px;
+                  color: #64748b;
+                  margin-bottom: 5px;
+                }
+                .chart-container {
+                  width: 100%;
+                  margin-bottom: 20px;
+                  border: 1px solid #e0e0e0;
+                  border-radius: 8px;
+                  overflow: hidden;
+                  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+                }
+                img {
+                  width: 100%;
+                  height: auto;
+                  display: block;
+                }
+                .footer {
+                  width: 100%;
+                  display: flex;
+                  justify-content: space-between;
+                  font-size: 12px;
+                  color: #64748b;
+                  margin-top: 20px;
+                  padding-top: 10px;
+                  border-top: 1px solid #e0e0e0;
+                }
+                .actions {
+                  display: flex;
+                  gap: 10px;
+                  margin-top: 20px;
+                }
+                button {
+                  padding: 8px 16px;
+                  background: #2563eb;
+                  color: white;
+                  border: none;
+                  border-radius: 4px;
+                  cursor: pointer;
+                  font-size: 14px;
+                  display: flex;
+                  align-items: center;
+                  gap: 5px;
+                  transition: background-color 0.2s;
+                }
+                button:hover {
+                  background: #1d4ed8;
+                }
+                button.secondary {
+                  background: #f8fafc;
+                  color: #334155;
+                  border: 1px solid #cbd5e1;
+                }
+                button.secondary:hover {
+                  background: #f1f5f9;
+                }
+                .button-icon {
+                  width: 16px;
+                  height: 16px;
+                }
+                @media print {
+                  .actions, button { display: none; }
+                  .chart-container {
+                    border: none;
+                    box-shadow: none;
+                  }
+                  body {
+                    padding: 0;
+                  }
+                  .print-container {
+                    width: 100%;
+                    max-width: none;
+                  }
+                }
+              </style>
+            </head>
+            <body>
+              <div class="print-container">
+                <div class="header">
+                  <div class="logo">Trading Terminal</div>
+                  <h1>${title}</h1>
+                </div>
+                
+                <div class="chart-container">
+                  <img src="${dataUrl}" alt="${title}">
+                </div>
+                
+                <div class="footer">
+                  <div>Generated: ${dateString} at ${timeString}</div>
+                  <div>Trading Terminal Dashboard</div>
+                </div>
+                
+                <div class="actions">
+                  <button onclick="window.print();">
+                    <svg class="button-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                      <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"></path>
+                      <rect x="6" y="14" width="12" height="8"></rect>
+                    </svg>
+                    Print Chart
+                  </button>
+                  <button class="secondary" onclick="window.close();">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      };
+      reader.readAsDataURL(blob);
+    } catch (error) {
+      console.error('Error preparing chart for print:', error);
+      alert('Failed to prepare chart for printing. Please try again.');
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
       {/* Header with user info and refresh button */}
@@ -665,7 +997,7 @@ const Dashboard = () => {
                 </CardTitle>
           </CardHeader>
           <CardContent>
-                <div className="h-64" ref={salesChartRef}>
+                <div className="h-64 relative" ref={salesChartRef}>
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={defaultChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -760,6 +1092,31 @@ const Dashboard = () => {
                       )}
                     </ComposedChart>
                   </ResponsiveContainer>
+                  <div className="absolute top-2 right-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Chart Actions</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleDownloadChart(salesChartRef, 'sales-chart.png')}>
+                          <Image className="mr-2 h-4 w-4" />
+                          Save as PNG
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDownloadChart(salesChartRef, 'sales-chart.png', 'clipboard')}>
+                          <Copy className="mr-2 h-4 w-4" />
+                          Copy to Clipboard
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handlePrintChart(salesChartRef, 'Sales and Purchases Chart')}>
+                          <Printer className="mr-2 h-4 w-4" />
+                          Print Chart
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -786,9 +1143,9 @@ const Dashboard = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-64" ref={cashChartRef}>
+                <div className="h-64 md:h-80 lg:h-72 w-full relative" ref={cashChartRef}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                    <PieChart margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                       <Pie
                         data={cashPieData}
                         cx="50%"
@@ -799,13 +1156,15 @@ const Dashboard = () => {
                         dataKey="value"
                         labelLine={false}
                         label={({ name, percent }) => 
-                          percent > 0.05 ? `${name.slice(0, 10)}${name.length > 10 ? '...' : ''}` : ''
+                          percent > 0.05 ? `${name.slice(0, 8)}${name.length > 8 ? '...' : ''}` : ''
                         }
                       >
                         {cashPieData.map((entry, index) => (
                           <Cell 
                             key={`cell-${index}`} 
-                            fill={colors[index % colors.length]} 
+                            fill={colors[index % colors.length]}
+                            stroke="white"
+                            strokeWidth={1}
                           />
                         ))}
                       </Pie>
@@ -815,19 +1174,56 @@ const Dashboard = () => {
                           name ? name.charAt(0).toUpperCase() + name.slice(1) : ''
                         ]}
                         contentStyle={{
-                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '6px',
-                          padding: '8px 12px',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                          backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '10px 14px',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
                         }}
                       />
-                      <Legend layout="horizontal" verticalAlign="bottom" align="center" />
+                      <Legend 
+                        layout="horizontal" 
+                        verticalAlign="bottom" 
+                        align="center"
+                        wrapperStyle={{
+                          fontSize: '12px',
+                          paddingTop: '10px'
+                        }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+                  <div className="absolute top-2 right-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Chart Actions</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleDownloadChart(cashChartRef, 'overview-cash-distribution.png')}>
+                          <Image className="mr-2 h-4 w-4" />
+                          Save as PNG
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDownloadChart(cashChartRef, 'overview-cash-distribution.png', 'clipboard')}>
+                          <Copy className="mr-2 h-4 w-4" />
+                          Copy to Clipboard
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handlePrintChart(cashChartRef, 'Cash Distribution')}>
+                          <Printer className="mr-2 h-4 w-4" />
+                          Print Chart
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setEnlargedChart('cash')}>
+                          <Maximize2 className="mr-2 h-4 w-4" />
+                          View Larger
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </>
       )}
@@ -890,6 +1286,14 @@ const Dashboard = () => {
                           </td>
                         </tr>
                       ))}
+                      <tr className="bg-gray-50">
+                        <td className="py-3 px-4 font-bold">Total Stock Balances</td>
+                        <td className="py-3 px-4 text-right font-bold">
+                          {formatQuantity(dashboardData.totalStockBalances)}
+                        </td>
+                        <td></td>
+                        <td></td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -898,57 +1302,100 @@ const Dashboard = () => {
             
             <Card className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>Stock Distribution</span>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => setEnlargedChart('stock')}
-                  >
-                    <Maximize2 className="h-4 w-4" />
-                  </Button>
-                </CardTitle>
+                <CardTitle>Stock Distribution</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-64" ref={stockChartRef}>
+                <div className="h-64 md:h-80 lg:h-72 w-full relative" ref={stockChartRef}>
+                  {/* Stock distribution chart */}
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                    <PieChart margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                       <Pie
                         data={stockPieData}
-                        dataKey="value"
-                        nameKey="name"
                         cx="50%"
                         cy="50%"
+                        innerRadius={60}
                         outerRadius={80}
-                        innerRadius={40}
-                        paddingAngle={1}
+                        fill="#8884d8"
+                        paddingAngle={2}
+                        dataKey="value"
                         labelLine={false}
                         label={({ name, percent }) => 
-                          percent > 0.05 ? `${name.slice(0, 10)}${name.length > 10 ? '...' : ''}` : ''
+                          percent > 0.05 ? `${name.slice(0, 8)}${name.length > 8 ? '...' : ''}` : ''
                         }
                       >
                         {stockPieData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={colors[index % colors.length]} 
+                            stroke="white"
+                            strokeWidth={1}
+                          />
                         ))}
                       </Pie>
                       <Tooltip 
-                        formatter={(value) => formatQuantity(Number(value))}
+                        formatter={(value, name) => [formatQuantity(Number(value)), name]}
                         contentStyle={{
-                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '6px',
-                          padding: '8px 12px',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                          backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '10px 14px',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
                         }}
                       />
-                      <Legend layout="horizontal" verticalAlign="bottom" align="center" />
+                      <Legend 
+                        layout="horizontal" 
+                        verticalAlign="bottom" 
+                        align="center"
+                        wrapperStyle={{
+                          fontSize: '12px',
+                          paddingTop: '10px'
+                        }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                  <div className="absolute top-2 right-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Chart Actions</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleDownloadChart(stockChartRef, 'stock-distribution.png')}>
+                          <Image className="mr-2 h-4 w-4" />
+                          Save as PNG
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDownloadChart(stockChartRef, 'stock-distribution.png', 'clipboard')}>
+                          <Copy className="mr-2 h-4 w-4" />
+                          Copy to Clipboard
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handlePrintChart(stockChartRef, 'Stock Distribution')}>
+                          <Printer className="mr-2 h-4 w-4" />
+                          Print Chart
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setEnlargedChart('stock')}>
+                          <Maximize2 className="mr-2 h-4 w-4" />
+                          View Larger
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+                <div className="mt-4 text-center">
+                  <Button 
+                    variant="link" 
+                    size="sm" 
+                    onClick={() => setEnlargedChart('stock')}
+                    className="text-xs"
+                  >
+                    View Larger Chart
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </>
       )}
       
@@ -1001,9 +1448,9 @@ const Dashboard = () => {
                         </tr>
                       ))}
                       <tr className="bg-gray-50">
-                        <td className="py-3 px-4 font-bold">Total</td>
+                        <td className="py-3 px-4 font-bold">Total Bank Balances</td>
                         <td className="py-3 px-4 text-right font-bold">
-                          {formatCurrency(dashboardData.totalCash)}
+                          {formatCurrency(dashboardData.totalBankBalances)}
                         </td>
                         <td></td>
                       </tr>
@@ -1028,9 +1475,9 @@ const Dashboard = () => {
                 </CardTitle>
           </CardHeader>
           <CardContent>
-                <div className="h-64" ref={cashChartRef}>
+                <div className="h-64 md:h-80 lg:h-72 w-full relative" ref={cashTabChartRef}>
               <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                    <PieChart margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                       <Pie
                         data={cashPieData}
                         dataKey="value"
@@ -1042,13 +1489,15 @@ const Dashboard = () => {
                         paddingAngle={2}
                         labelLine={false}
                         label={({ name, percent }) => 
-                          percent > 0.05 ? `${name.slice(0, 10)}${name.length > 10 ? '...' : ''}` : ''
+                          percent > 0.05 ? `${name.slice(0, 8)}${name.length > 8 ? '...' : ''}` : ''
                         }
                       >
                         {cashPieData.map((entry, index) => (
                           <Cell 
                             key={`cell-${index}`} 
-                            fill={colors[index % colors.length]} 
+                            fill={colors[index % colors.length]}
+                            stroke="white"
+                            strokeWidth={1}
                           />
                         ))}
                       </Pie>
@@ -1058,16 +1507,53 @@ const Dashboard = () => {
                           name ? name.charAt(0).toUpperCase() + name.slice(1) : ''
                         ]}
                         contentStyle={{
-                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '6px',
-                          padding: '8px 12px',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                          backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '10px 14px',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
                         }}
                       />
-                      <Legend layout="horizontal" verticalAlign="bottom" align="center" />
+                      <Legend 
+                        layout="horizontal" 
+                        verticalAlign="bottom" 
+                        align="center"
+                        wrapperStyle={{
+                          fontSize: '12px',
+                          paddingTop: '10px'
+                        }}
+                      />
                     </PieChart>
               </ResponsiveContainer>
+              <div className="absolute top-2 right-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Chart Actions</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => handleDownloadChart(cashTabChartRef, 'cash-tab-distribution.png')}>
+                      <Image className="mr-2 h-4 w-4" />
+                      Save as PNG
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleDownloadChart(cashTabChartRef, 'cash-tab-distribution.png', 'clipboard')}>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy to Clipboard
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePrintChart(cashTabChartRef, 'Cash Distribution')}>
+                      <Printer className="mr-2 h-4 w-4" />
+                      Print Chart
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setEnlargedChart('cash')}>
+                      <Maximize2 className="mr-2 h-4 w-4" />
+                      View Larger
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -1078,28 +1564,31 @@ const Dashboard = () => {
       {/* Add the enlarged chart modal */}
       {enlargedChart && (
         <Dialog open={!!enlargedChart} onOpenChange={() => setEnlargedChart(null)}>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
+          <DialogContent className="max-w-5xl p-0 overflow-hidden">
+            <DialogHeader className="px-6 pt-6">
               <DialogTitle>{enlargedChart === 'cash' ? 'Cash Distribution' : 'Stock Distribution'}</DialogTitle>
             </DialogHeader>
-            <div className="h-[500px] w-full">
+            <div className="h-[500px] w-full px-4 pb-6 relative" ref={enlargedChartRef}>
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+                <PieChart margin={{ top: 10, right: 10, bottom: 30, left: 10 }}>
                   <Pie
                     data={enlargedChart === 'cash' ? cashPieData : stockPieData}
                     dataKey="value"
                     nameKey="name"
                     cx="50%"
                     cy="50%"
-                    outerRadius={200}
-                    innerRadius={enlargedChart === 'cash' ? 140 : 100}
+                    innerRadius={100}
+                    outerRadius={180}
                     paddingAngle={2}
                     label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                    labelLine={true}
                   >
                     {(enlargedChart === 'cash' ? cashPieData : stockPieData).map((entry, index) => (
                       <Cell 
                         key={`cell-${index}`} 
                         fill={colors[index % colors.length]} 
+                        stroke="white"
+                        strokeWidth={2}
                       />
                     ))}
                   </Pie>
@@ -1110,16 +1599,65 @@ const Dashboard = () => {
                         : [formatQuantity(Number(value)), name]
                     }
                     contentStyle={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '6px',
-                      padding: '8px 12px',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '10px 14px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
                     }}
                   />
-                  <Legend layout="horizontal" verticalAlign="bottom" align="center" />
+                  <Legend 
+                    layout="horizontal" 
+                    verticalAlign="bottom" 
+                    align="center"
+                    wrapperStyle={{
+                      fontSize: '13px',
+                      paddingTop: '20px'
+                    }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
+              <div className="absolute top-2 right-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Chart Actions</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem 
+                      onClick={() => handleDownloadChart(
+                        enlargedChartRef, 
+                        enlargedChart === 'cash' ? 'cash-distribution-large.png' : 'stock-distribution-large.png'
+                      )}
+                    >
+                      <Image className="mr-2 h-4 w-4" />
+                      Save as PNG
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => handleDownloadChart(
+                        enlargedChartRef, 
+                        enlargedChart === 'cash' ? 'cash-distribution-large.png' : 'stock-distribution-large.png',
+                        'clipboard'
+                      )}
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy to Clipboard
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => handlePrintChart(
+                        enlargedChartRef, 
+                        enlargedChart === 'cash' ? 'Cash Distribution (Detailed)' : 'Stock Distribution (Detailed)'
+                      )}
+                    >
+                      <Printer className="mr-2 h-4 w-4" />
+                      Print Chart
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
