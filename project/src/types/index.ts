@@ -70,6 +70,7 @@ export type BankTransferEntry = {
   createdAt: Date;
   updatedAt?: Date;
   editedBy?: string;
+  createdBy?: string;
 }
 
 export type StockData = {
@@ -111,6 +112,12 @@ export type DashboardData = {
   requiredMargin: number;
   netCash: number;
   netCashAfterSales: number;
+  totalBankBalances: number;
+  totalStockBalances: number;
+  salesByBank: {
+    bank: string;
+    total: number;
+  }[];
 }
 
 export type StatsData = {

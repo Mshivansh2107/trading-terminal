@@ -1,0 +1,33 @@
+/* Aspect Ratio Utility Classes */
+.aspect-ratio {
+  position: relative;
+  width: 100%;
+}
+
+.aspect-ratio::before {
+  content: "";
+  display: block;
+}
+
+.aspect-ratio > * {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* 16:9 aspect ratio */
+.aspect-ratio.aspect-16-9::before {
+  padding-top: 56.25%;
+}
+
+/* 4:3 aspect ratio */
+.aspect-ratio.aspect-4-3::before {
+  padding-top: 75%;
+}
+
+/* 1:1 aspect ratio (square) */
+.aspect-ratio.aspect-1-1::before {
+  padding-top: 100%;
+} 
