@@ -155,7 +155,7 @@ const Dashboard = () => {
       
       // Temporarily append to body
       document.body.appendChild(clone);
-      
+
       // Wait for next render cycle
       await new Promise(resolve => setTimeout(resolve, 200));
       
@@ -164,8 +164,7 @@ const Dashboard = () => {
         logging: false,
         useCORS: true,
         allowTaint: true,
-        backgroundColor: 'white',
-        scale: 2, // Higher resolution
+        background: 'white',
         width: 1200,
         height: 800
       });
@@ -1162,7 +1161,7 @@ const Dashboard = () => {
                         {cashPieData.map((entry, index) => (
                           <Cell 
                             key={`cell-${index}`} 
-                            fill={colors[index % colors.length]}
+                            fill={colors[index % colors.length]} 
                             stroke="white"
                             strokeWidth={1}
                           />
@@ -1221,9 +1220,9 @@ const Dashboard = () => {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+            </div>
+          </CardContent>
+        </Card>
           </div>
         </>
       )}
@@ -1392,10 +1391,10 @@ const Dashboard = () => {
                   >
                     View Larger Chart
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
         </>
       )}
       
@@ -1495,7 +1494,7 @@ const Dashboard = () => {
                         {cashPieData.map((entry, index) => (
                           <Cell 
                             key={`cell-${index}`} 
-                            fill={colors[index % colors.length]}
+                            fill={colors[index % colors.length]} 
                             stroke="white"
                             strokeWidth={1}
                           />

@@ -11,6 +11,7 @@
     "setup:date-filter": "npm install react-datepicker date-fns @radix-ui/react-popover clsx tailwind-merge && npm install --save-dev @types/react-datepicker"
   },
   "dependencies": {
+    "@radix-ui/react-alert-dialog": "^1.1.13",
     "@radix-ui/react-dialog": "^1.1.11",
     "@radix-ui/react-dropdown-menu": "^2.1.14",
     "@radix-ui/react-label": "^2.1.4",

@@ -126,41 +126,41 @@ const Navbar = () => {
           {/* Admin-only links */}
           {isAdmin && (
             <>
-              <NavLink 
-                to="/analytics" 
-                className={({ isActive }) => 
-                  `flex items-center p-2 rounded-lg mb-1 transition-colors ${
-                    isActive ? 'bg-blue-700' : 'hover:bg-gray-700'
-                  }`
-                }
-              >
-                <BarChart3 className="h-5 w-5" />
-                <span className="ml-3 hidden md:block">Analytics</span>
-              </NavLink>
-              
-              <NavLink 
-                to="/stats" 
-                className={({ isActive }) => 
-                  `flex items-center p-2 rounded-lg mb-1 transition-colors ${
-                    isActive ? 'bg-blue-700' : 'hover:bg-gray-700'
-                  }`
-                }
-              >
-                <BarChart3 className="h-5 w-5" />
-                <span className="ml-3 hidden md:block">Stats</span>
-              </NavLink>
-              
-              <NavLink 
-                to="/admin/users" 
-                className={({ isActive }) => 
-                  `flex items-center p-2 rounded-lg mb-1 transition-colors ${
-                    isActive ? 'bg-blue-700' : 'hover:bg-gray-700'
-                  }`
-                }
-              >
-                <Users className="h-5 w-5" />
-                <span className="ml-3 hidden md:block">User Management</span>
-              </NavLink>
+          <NavLink 
+            to="/analytics" 
+            className={({ isActive }) => 
+              `flex items-center p-2 rounded-lg mb-1 transition-colors ${
+                isActive ? 'bg-blue-700' : 'hover:bg-gray-700'
+              }`
+            }
+          >
+            <BarChart3 className="h-5 w-5" />
+            <span className="ml-3 hidden md:block">Analytics</span>
+          </NavLink>
+          
+          <NavLink 
+            to="/stats" 
+            className={({ isActive }) => 
+              `flex items-center p-2 rounded-lg mb-1 transition-colors ${
+                isActive ? 'bg-blue-700' : 'hover:bg-gray-700'
+              }`
+            }
+          >
+            <BarChart3 className="h-5 w-5" />
+            <span className="ml-3 hidden md:block">Stats</span>
+          </NavLink>
+          
+            <NavLink 
+              to="/admin/users" 
+              className={({ isActive }) => 
+                `flex items-center p-2 rounded-lg mb-1 transition-colors ${
+                  isActive ? 'bg-blue-700' : 'hover:bg-gray-700'
+                }`
+              }
+            >
+              <Users className="h-5 w-5" />
+              <span className="ml-3 hidden md:block">User Management</span>
+            </NavLink>
             </>
           )}
         </div>

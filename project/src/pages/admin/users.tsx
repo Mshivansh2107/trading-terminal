@@ -321,22 +321,22 @@ const AdminUsers = () => {
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
               </div>
             )}
-            
-            {!isLoading && users.length === 0 && (
+          
+          {!isLoading && users.length === 0 && (
               <div className="col-span-full flex flex-col items-center justify-center py-16">
                 <UserPlus size={48} className="text-gray-300 mb-4" />
                 <p className="text-gray-500 text-lg font-medium">No users found</p>
                 <p className="text-gray-400 text-sm">Create a new user to get started</p>
               </div>
-            )}
+          )}
 
-            {users.map((user) => (
+          {users.map((user) => (
               <div 
                 key={user.id} 
                 className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100 flex flex-col h-full transform hover:-translate-y-1"
               >
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-5">
-                  <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start">
                     <div className="flex-1 min-w-0">
                       <h3 className="text-lg font-semibold text-gray-800 truncate">
                         {user.username || user.email.split('@')[0]}
@@ -359,15 +359,15 @@ const AdminUsers = () => {
                           </div>
                         )}
                       </div>
-                    </div>
-                    {user.is_admin && (
+                  </div>
+                  {user.is_admin && (
                       <div className="flex-shrink-0">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           <Shield size={12} className="mr-1" />
-                          Admin
-                        </span>
+                      Admin
+                    </span>
                       </div>
-                    )}
+                  )}
                   </div>
                 </div>
                 
@@ -377,14 +377,14 @@ const AdminUsers = () => {
                       <Calendar size={14} className="mr-2" />
                       <span>Created: {new Date(user.created_at).toLocaleDateString()}</span>
                     </div>
-                    {user.last_sign_in_at && (
+                  {user.last_sign_in_at && (
                       <div className="flex items-center text-sm text-gray-600">
                         <Clock size={14} className="mr-2" />
                         <span>Last login: {new Date(user.last_sign_in_at).toLocaleDateString()}</span>
                       </div>
-                    )}
-                  </div>
-                  
+                  )}
+                </div>
+                
                   <div className="flex justify-end gap-2 mt-auto pt-4 border-t border-gray-100">
                     <Button 
                       variant="outline" 
@@ -392,22 +392,22 @@ const AdminUsers = () => {
                       className="flex items-center gap-1 transition-colors hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"
                       onClick={() => handleEditClick(user)}
                     >
-                      <Edit size={14} />
+                    <Edit size={14} />
                       <span>Edit</span>
-                    </Button>
+                  </Button>
                     <Button 
                       variant="outline" 
                       size="sm" 
                       className="flex items-center gap-1 text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 hover:border-red-200"
                       onClick={() => handleDeleteClick(user)}
                     >
-                      <Trash2 size={14} />
+                    <Trash2 size={14} />
                       <span>Delete</span>
-                    </Button>
+                  </Button>
                   </div>
                 </div>
               </div>
-            ))}
+          ))}
           </div>
         </div>
       </div>
