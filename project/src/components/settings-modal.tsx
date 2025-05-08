@@ -107,110 +107,110 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onOpenChange }) => 
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Settings</DialogTitle>
-            <DialogDescription>
-              Adjust your application settings here. Click save when you're done.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="requiredMargin" className="text-right">
-                Required Margin (%)
-              </Label>
-              <Input
-                id="requiredMargin"
-                type="number"
-                step="0.1"
-                value={requiredMargin}
-                onChange={(e) => setRequiredMargin(e.target.value)}
-                className="col-span-3"
-              />
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="currentUsdPrice" className="text-right">
-                Current USDT Price
-              </Label>
-              <div className="col-span-3 flex gap-2">
-                <Input
-                  id="currentUsdPrice"
-                  type="number"
-                  step="0.01"
-                  value={currentUsdPrice}
-                  onChange={(e) => setCurrentUsdPrice(e.target.value)}
-                  className="flex-1"
-                  disabled
-                />
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="outline"
-                  onClick={handleRefreshPrice}
-                  disabled={isLoading || isPending}
-                  title="Refresh USD-INR rate from FX Rates API"
-                >
-                  <RefreshCw className={`h-4 w-4 ${(isLoading || isPending) ? 'animate-spin' : ''}`} />
-                </Button>
-              </div>
-              <p className="text-xs text-gray-500 col-span-4 text-right">
-                Using FX Rates API - Updates automatically every hour
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="buyPriceUsdt" className="text-right">
-                Buy Price USDT
-              </Label>
-              <Input
-                id="buyPriceUsdt"
-                type="number"
-                step="0.01"
-                value={buyPriceUsdt}
-                onChange={(e) => setBuyPriceUsdt(e.target.value)}
-                className="col-span-3"
-              />
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="salesPriceRange" className="text-right">
-                Sales Price Range
-              </Label>
-              <Input
-                id="salesPriceRange"
-                type="number"
-                step="0.01"
-                value={salesPriceRange}
-                onChange={(e) => setSalesPriceRange(e.target.value)}
-                className="col-span-3"
-              />
-              <p className="text-xs text-gray-500 col-span-4 text-right">
-                Set to 0 to use automatic calculation
-              </p>
-            </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Settings</DialogTitle>
+          <DialogDescription>
+            Adjust your application settings here. Click save when you're done.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="requiredMargin" className="text-right">
+              Required Margin (%)
+            </Label>
+            <Input
+              id="requiredMargin"
+              type="number"
+              step="0.1"
+              value={requiredMargin}
+              onChange={(e) => setRequiredMargin(e.target.value)}
+              className="col-span-3"
+            />
           </div>
           
-          {/* Add management links */}
-          <div className="grid gap-4 py-2 border-t pt-4">
-            <h4 className="text-sm font-medium mb-1">Management Options</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <Button asChild variant="outline" className="w-full">
-                <Link to="/banks" className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4" />
-                  <span>Bank Management</span>
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full">
-                <Link to="/platforms" className="flex items-center gap-2">
-                  <LayoutGrid className="h-4 w-4" />
-                  <span>Platform Management</span>
-                </Link>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="currentUsdPrice" className="text-right">
+              Current USDT Price
+            </Label>
+            <div className="col-span-3 flex gap-2">
+              <Input
+                id="currentUsdPrice"
+                type="number"
+                step="0.01"
+                value={currentUsdPrice}
+                onChange={(e) => setCurrentUsdPrice(e.target.value)}
+                className="flex-1"
+                disabled
+              />
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                onClick={handleRefreshPrice}
+                disabled={isLoading || isPending}
+                title="Refresh USD-INR rate from FX Rates API"
+              >
+                <RefreshCw className={`h-4 w-4 ${(isLoading || isPending) ? 'animate-spin' : ''}`} />
               </Button>
             </div>
+            <p className="text-xs text-gray-500 col-span-4 text-right">
+              Using FX Rates API - Updates automatically every hour
+            </p>
           </div>
+          
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="buyPriceUsdt" className="text-right">
+              Buy Price USDT
+            </Label>
+            <Input
+              id="buyPriceUsdt"
+              type="number"
+              step="0.01"
+              value={buyPriceUsdt}
+              onChange={(e) => setBuyPriceUsdt(e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+          
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="salesPriceRange" className="text-right">
+              Sales Price Range
+            </Label>
+            <Input
+              id="salesPriceRange"
+              type="number"
+              step="0.01"
+              value={salesPriceRange}
+              onChange={(e) => setSalesPriceRange(e.target.value)}
+              className="col-span-3"
+            />
+            <p className="text-xs text-gray-500 col-span-4 text-right">
+              Set to 0 to use automatic calculation
+            </p>
+          </div>
+        </div>
+        
+        {/* Add management links */}
+        <div className="grid gap-4 py-2 border-t pt-4">
+          <h4 className="text-sm font-medium mb-1">Management Options</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <Button asChild variant="outline" className="w-full">
+              <Link to="/banks" className="flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                <span>Bank Management</span>
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full">
+              <Link to="/platforms" className="flex items-center gap-2">
+                <LayoutGrid className="h-4 w-4" />
+                <span>Platform Management</span>
+              </Link>
+            </Button>
+          </div>
+        </div>
 
           {/* Add reset section */}
           <div className="grid gap-4 py-2 border-t pt-4">
@@ -224,18 +224,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onOpenChange }) => 
               Reset All Data
             </Button>
           </div>
-          
-          <DialogFooter>
-            <Button
-              type="submit"
-              onClick={handleSave}
-              disabled={isLoading || isPending}
-            >
-              {(isLoading || isPending) ? 'Saving...' : 'Save changes'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        
+        <DialogFooter>
+          <Button 
+            type="submit" 
+            onClick={handleSave}
+            disabled={isLoading || isPending}
+          >
+            {(isLoading || isPending) ? 'Saving...' : 'Save changes'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
       <ResetConfirmationDialog
         open={showResetDialog}

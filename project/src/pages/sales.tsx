@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAtom } from 'jotai';
 import { salesAtom, addSaleAtom, updateSaleAtom, deleteSaleAtom, banksAtom, platformsAtom, refreshDataAtom } from '../store/data';
-import { formatCurrency, formatQuantity, formatDateTime } from '../lib/utils';
+import { formatCurrency, formatQuantity, formatDateTime, calculateStockBalance } from '../lib/utils';
 import DataTable from '../components/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -11,9 +11,13 @@ import EditTransactionModal from '../components/edit-transaction-modal';
 import { SalesEntry, Bank, Platform, Currency } from '../types';
 import DateRangeFilter from '../components/date-range-filter';
 import { filterByDateAtom, dateRangeAtom } from '../store/filters';
+import BalanceWarning from '../components/ui/balance-warning';
+import { purchasesAtom, transfersAtom } from '../store/data';
 
 const Sales = () => {
   const [sales] = useAtom(salesAtom);
+  const [purchases] = useAtom(purchasesAtom);
+  const [transfers] = useAtom(transfersAtom);
   const [, addSale] = useAtom(addSaleAtom);
   const [, updateSale] = useAtom(updateSaleAtom);
   const [, deleteSale] = useAtom(deleteSaleAtom);
@@ -32,7 +36,26 @@ const Sales = () => {
   const [price, setPrice] = useState<string>('');
   const [quantity, setQuantity] = useState<string>('');
   const [isManualQuantity, setIsManualQuantity] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState<Platform | ''>('');
+  const [selectedBank, setSelectedBank] = useState<Bank | ''>('');
   
+  // Calculate current stock balance for the selected platform
+  const currentStockBalance = useMemo(() => {
+    if (!selectedPlatform) return 0;
+    return calculateStockBalance(purchases, sales, transfers, selectedPlatform);
+  }, [selectedPlatform, purchases, sales, transfers]);
+
+  // Calculate projected stock balance after sale
+  const projectedStockBalance = useMemo(() => {
+    if (!selectedPlatform || !quantity) return currentStockBalance;
+    return currentStockBalance - parseFloat(quantity);
+  }, [currentStockBalance, selectedPlatform, quantity]);
+
+  // Check if the sale would result in negative stock
+  const wouldResultInNegativeStock = useMemo(() => {
+    return projectedStockBalance < 0;
+  }, [projectedStockBalance]);
+
   // Auto-calculate quantity when total price or price changes
   useEffect(() => {
     if (!isManualQuantity && totalPrice && price && parseFloat(price) > 0) {
@@ -59,14 +82,26 @@ const Sales = () => {
     setPrice(e.target.value);
     setIsManualQuantity(false);
   };
+
+  // Handle platform change
+  const handlePlatformChange = (value: Platform) => {
+    setSelectedPlatform(value);
+  };
+
+  // Handle bank change
+  const handleBankChange = (value: Bank) => {
+    setSelectedBank(value);
+  };
   
   // Reset form fields when form is closed/opened
   useEffect(() => {
-    if (showForm) {
+    if (!showForm) {
       setTotalPrice('');
       setPrice('');
       setQuantity('');
       setIsManualQuantity(false);
+      setSelectedPlatform('');
+      setSelectedBank('');
     }
   }, [showForm]);
   
@@ -95,6 +130,14 @@ const Sales = () => {
   
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // If there would be negative balance, show confirmation
+    if (wouldResultInNegativeStock) {
+      const confirmed = window.confirm(
+        `Warning: This sale would result in a negative balance of ${Math.abs(projectedStockBalance).toFixed(8)} for ${selectedPlatform}.\n\nDo you want to proceed anyway?`
+      );
+      if (!confirmed) return;
+    }
     
     const formData = new FormData(e.currentTarget);
     const newSale = {
@@ -292,6 +335,9 @@ const Sales = () => {
                     type="select"
                     required
                     options={bankOptions}
+                    inputProps={{
+                      onChange: (e) => handleBankChange(e.target.value as Bank)
+                    }}
                   />
                   
                   <FormField
@@ -300,6 +346,9 @@ const Sales = () => {
                     type="select"
                     required
                     options={platformOptions}
+                    inputProps={{
+                      onChange: (e) => handlePlatformChange(e.target.value as Platform)
+                    }}
                   />
                   
                   <FormField
@@ -378,6 +427,12 @@ const Sales = () => {
                     }}
                   />
                 </div>
+                
+                {wouldResultInNegativeStock && (
+                  <BalanceWarning 
+                    message={`This sale would result in a negative balance of ${Math.abs(projectedStockBalance).toFixed(8)} for ${selectedPlatform}`}
+                  />
+                )}
                 
                 <div className="flex justify-end mt-4">
                   <Button type="submit">

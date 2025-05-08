@@ -42,12 +42,12 @@ export const initSupabaseSessionAtom = atom(
       
       if (isAuthenticated && session?.user) {
         const isAdmin = await checkIsUserAdmin(session.user.id);
-        
-        set(authStateAtom, {
+      
+      set(authStateAtom, {
           user: session.user,
-          session,
-          isLoading: false,
-          isAuthenticated,
+        session,
+        isLoading: false,
+        isAuthenticated,
           isAdmin,
           error: null,
         });
@@ -58,8 +58,8 @@ export const initSupabaseSessionAtom = atom(
           isLoading: false,
           isAuthenticated: false,
           isAdmin: false,
-          error: null,
-        });
+        error: null,
+      });
       }
     } catch (error) {
       set(authStateAtom, {
@@ -134,6 +134,7 @@ export const signUpWithEmailAtom = atom(
         session: data.session,
         isLoading: false,
         isAuthenticated: !!data.session,
+        isAdmin: false,
         error: null,
       });
       

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAtom } from 'jotai';
 import { purchasesAtom, addPurchaseAtom, updatePurchaseAtom, deletePurchaseAtom, banksAtom, platformsAtom, refreshDataAtom } from '../store/data';
-import { formatCurrency, formatQuantity, formatDateTime } from '../lib/utils';
+import { formatCurrency, formatQuantity, formatDateTime, calculateBankTotal } from '../lib/utils';
 import DataTable from '../components/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -11,9 +11,14 @@ import EditTransactionModal from '../components/edit-transaction-modal';
 import { PurchaseEntry, Bank, Platform } from '../types';
 import DateRangeFilter from '../components/date-range-filter';
 import { filterByDateAtom, dateRangeAtom } from '../store/filters';
+import BalanceWarning from '../components/ui/balance-warning';
+import { salesAtom, expensesAtom, bankTransfersAtom } from '../store/data';
 
 const Purchase = () => {
   const [purchases] = useAtom(purchasesAtom);
+  const [sales] = useAtom(salesAtom);
+  const [expenses] = useAtom(expensesAtom);
+  const [bankTransfers] = useAtom(bankTransfersAtom);
   const [, addPurchase] = useAtom(addPurchaseAtom);
   const [, updatePurchase] = useAtom(updatePurchaseAtom);
   const [, deletePurchase] = useAtom(deletePurchaseAtom);
@@ -24,12 +29,66 @@ const Purchase = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [filterByDate] = useAtom(filterByDateAtom);
   const [dateRange] = useAtom(dateRangeAtom);
+  const [banks] = useAtom(banksAtom);
+  const [platforms] = useAtom(platformsAtom);
   
   // Form state for calculations
   const [totalPrice, setTotalPrice] = useState<string>('');
   const [price, setPrice] = useState<string>('');
   const [quantity, setQuantity] = useState<string>('');
   const [isManualQuantity, setIsManualQuantity] = useState(false);
+  const [selectedBank, setSelectedBank] = useState<Bank | ''>('');
+  
+  // Calculate current bank balance
+  const currentBankBalance = useMemo(() => {
+    if (!selectedBank) return 0;
+    
+    // Calculate sales (money in)
+    const salesTotal = sales
+      .filter(s => s.bank === selectedBank)
+      .reduce((sum, s) => sum + s.totalPrice, 0);
+    
+    // Calculate purchases (money out)
+    const purchasesTotal = purchases
+      .filter(p => p.bank === selectedBank)
+      .reduce((sum, p) => sum + p.totalPrice, 0);
+    
+    // Calculate expenses
+    const expensesTotal = expenses
+      .filter(e => e.bank === selectedBank)
+      .reduce((sum, e) => sum + (e.type === 'expense' ? e.amount : -e.amount), 0);
+    
+    // Calculate bank transfers
+    const transfersIn = bankTransfers
+      .filter(t => t.toBank === selectedBank && t.fromBank !== 'ADJUSTMENT')
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    const transfersOut = bankTransfers
+      .filter(t => t.fromBank === selectedBank && t.toBank !== 'ADJUSTMENT')
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    // Calculate adjustment transfers
+    const adjustmentIn = bankTransfers
+      .filter(t => t.fromBank === 'ADJUSTMENT' && t.toBank === selectedBank)
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    const adjustmentOut = bankTransfers
+      .filter(t => t.fromBank === selectedBank && t.toBank === 'ADJUSTMENT')
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    return salesTotal - purchasesTotal - expensesTotal + transfersIn - transfersOut + adjustmentIn - adjustmentOut;
+  }, [selectedBank, sales, purchases, expenses, bankTransfers]);
+
+  // Calculate projected bank balance after purchase
+  const projectedBankBalance = useMemo(() => {
+    if (!selectedBank || !totalPrice) return currentBankBalance;
+    return currentBankBalance - parseFloat(totalPrice);
+  }, [currentBankBalance, selectedBank, totalPrice]);
+
+  // Check if the purchase would result in negative balance
+  const wouldResultInNegativeBalance = useMemo(() => {
+    return projectedBankBalance < 0;
+  }, [projectedBankBalance]);
   
   // Auto-calculate quantity when total price or price changes
   useEffect(() => {
@@ -57,14 +116,20 @@ const Purchase = () => {
     setPrice(e.target.value);
     setIsManualQuantity(false);
   };
+
+  // Handle bank change
+  const handleBankChange = (value: Bank) => {
+    setSelectedBank(value);
+  };
   
   // Reset form fields when form is closed/opened
   useEffect(() => {
-    if (showForm) {
+    if (!showForm) {
       setTotalPrice('');
       setPrice('');
       setQuantity('');
       setIsManualQuantity(false);
+      setSelectedBank('');
     }
   }, [showForm]);
   
@@ -87,6 +152,14 @@ const Purchase = () => {
   
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // If there would be negative balance, show confirmation
+    if (wouldResultInNegativeBalance) {
+      const confirmed = window.confirm(
+        `Warning: This purchase would result in a negative balance of ${formatCurrency(Math.abs(projectedBankBalance))} for ${selectedBank}.\n\nDo you want to proceed anyway?`
+      );
+      if (!confirmed) return;
+    }
     
     const formData = new FormData(e.currentTarget);
     const newPurchase = {
@@ -191,30 +264,6 @@ const Purchase = () => {
     }
   ], [handleEdit, handleDelete]);
   
-  const [banks] = useAtom(banksAtom);
-  const [platforms] = useAtom(platformsAtom);
-  
-  // Replace hardcoded banks with data from database
-  const bankOptions = useMemo(() => {
-    // Use banks from the store if available
-    if (banks && banks.length > 0) {
-      return banks
-        .filter(bank => bank.isActive)
-        .map(bank => ({
-          value: bank.name,
-          label: bank.name
-        }));
-    }
-    
-    // Return empty array if no banks are available
-    return [];
-  }, [banks]);
-  
-  const currencies = [
-    { value: 'USDT', label: 'USDT' },
-    { value: 'INR', label: 'INR' },
-  ];
-
   // Replace hardcoded platforms with data from database
   const platformOptions = useMemo(() => {
     // Use platforms from the store if available
@@ -292,7 +341,13 @@ const Purchase = () => {
                     name="bank"
                     type="select"
                     required
-                    options={bankOptions}
+                    options={banks.map(bank => ({
+                      value: bank.name,
+                      label: bank.name
+                    }))}
+                    inputProps={{
+                      onChange: (e) => handleBankChange(e.target.value as Bank)
+                    }}
                   />
                   
                   <FormField
@@ -317,7 +372,10 @@ const Purchase = () => {
                     name="fiatType"
                     type="select"
                     required
-                    options={currencies}
+                    options={[
+                      { value: 'USDT', label: 'USDT' },
+                      { value: 'INR', label: 'INR' }
+                    ]}
                   />
                   
                   <FormField
@@ -379,6 +437,12 @@ const Purchase = () => {
                     }}
                   />
                 </div>
+                
+                {wouldResultInNegativeBalance && (
+                  <BalanceWarning 
+                    message={`This purchase would result in a negative balance of ${formatCurrency(Math.abs(projectedBankBalance))} for ${selectedBank}`}
+                  />
+                )}
                 
                 <div className="flex justify-end mt-4">
                   <Button type="submit">
