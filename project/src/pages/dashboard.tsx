@@ -21,7 +21,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { dashboardDataAtom, refreshDataAtom, statsDataAtom, settingsAtom, salesAtom, purchasesAtom, transfersAtom, updateStockBalanceAtom, updateCashBalanceAtom, banksAtom, platformsAtom, dataVersionAtom } from '../store/data';
+import { dashboardDataAtom, refreshDataAtom, statsDataAtom, settingsAtom, salesAtom, purchasesAtom, transfersAtom, updateStockBalanceAtom, updateCashBalanceAtom, banksAtom, platformsAtom, dataVersionAtom, updatePosSettingsAtom, posSettingsAtom } from '../store/data';
 import DashboardCard from '../components/layout/dashboard-card';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { formatCurrency, formatQuantity, prepareExportData } from '../lib/utils';
@@ -39,7 +39,8 @@ import {
   Copy,
   Image,
   MoreHorizontal,
-  Printer
+  Printer,
+  Filter
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { authStateAtom } from '../store/supabaseAuth';
@@ -63,6 +64,7 @@ import {
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from '../components/ui/dropdown-menu';
+import { Checkbox } from '../components/ui/checkbox';
 
 const Dashboard = () => {
   const [dashboardData] = useAtom(dashboardDataAtom);
@@ -85,6 +87,9 @@ const Dashboard = () => {
   const [isCapturing, setIsCapturing] = useState(false);
   const tooltipTimeoutRef = useRef<NodeJS.Timeout>();
   const [enlargedChart, setEnlargedChart] = useState<'stock' | 'cash' | null>(null);
+  const [posSettings] = useAtom(posSettingsAtom);
+  const [, updatePosSettings] = useAtom(updatePosSettingsAtom);
+  const [posBankSelectOpen, setPosBankSelectOpen] = useState(false);
 
   // Refs for chart containers
   const salesChartRef = useRef<HTMLDivElement>(null);
@@ -902,7 +907,7 @@ const Dashboard = () => {
       {activeTab === 'overview' && (
         <>
           {/* Main metrics cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <Card className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg font-medium flex items-center gap-2">
@@ -927,11 +932,11 @@ const Dashboard = () => {
               </CardContent>
             </Card>
         
-        <DashboardCard 
-          title="Total Cash" 
-          value={formatCurrency(dashboardData.totalCash)}
-          secondaryValue={formatCurrency(dashboardData.totalCashAlt)}
-          trend="up"
+            <DashboardCard 
+              title="Total Cash" 
+              value={formatCurrency(dashboardData.totalCash)}
+              secondaryValue={formatCurrency(dashboardData.totalCashAlt)}
+              trend="up"
               icon={<DatabaseIcon className="h-4 w-4 text-green-500" />}
             />
             
@@ -953,12 +958,12 @@ const Dashboard = () => {
               </CardContent>
             </Card>
         
-        <DashboardCard 
-          title="Current Margin" 
-          value={`${dashboardData.currentMargin}%`}
-          secondaryValue={`Required: ${dashboardData.requiredMargin}%`}
-          trend={marginStatus}
-          valueClassName={marginStatus === 'up' ? 'text-green-600' : 'text-red-600'}
+            <DashboardCard 
+              title="Current Margin" 
+              value={`${dashboardData.currentMargin}%`}
+              secondaryValue={`Required: ${dashboardData.requiredMargin}%`}
+              trend={marginStatus}
+              valueClassName={marginStatus === 'up' ? 'text-green-600' : 'text-red-600'}
               icon={<BarChart2 className="h-4 w-4 text-purple-500" />}
             />
           </div>
@@ -973,17 +978,45 @@ const Dashboard = () => {
               icon={<DatabaseIcon className="h-4 w-4 text-blue-500" />}
             />
             
-            <DashboardCard 
-              title="Net Cash After Sales Started in POS" 
-              value={formatCurrency(dashboardData.netCashAfterSales)}
-              trend={dashboardData.netCashAfterSales >= 0 ? 'up' : 'down'}
-              className="h-full"
-              icon={<DatabaseIcon className="h-4 w-4 text-green-500" />}
-        />
-      </div>
+            <Card className="shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-lg font-medium flex items-center gap-2">
+                    <DatabaseIcon className="h-4 w-4 text-green-500" />
+                    Net Cash After Sales Started in POS
+                  </CardTitle>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    className="h-8 w-8" 
+                    onClick={() => setPosBankSelectOpen(true)}
+                  >
+                    <Filter className="h-4 w-4" />
+                  </Button>
+                </div>
+                {posSettings?.posActiveBanks && posSettings.posActiveBanks.length > 0 && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    Includes: {posSettings.posActiveBanks.join(', ')}
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col">
+                  <p className={`text-2xl font-bold ${dashboardData.netCashAfterSales >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(dashboardData.netCashAfterSales)}
+                  </p>
+                  <div className="flex items-center mt-1">
+                    <span className={`text-xs ${dashboardData.netCashAfterSales >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {dashboardData.netCashAfterSales >= 0 ? '↑' : '↓'}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
       
           {/* Terminal metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <Card className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg font-medium flex items-center justify-between">
@@ -994,8 +1027,8 @@ const Dashboard = () => {
                     {shouldShowHourlyView ? 'Hourly View' : 'Daily View'}
                   </div>
                 </CardTitle>
-          </CardHeader>
-          <CardContent>
+              </CardHeader>
+              <CardContent>
                 <div className="h-64 relative" ref={salesChartRef}>
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={defaultChartData}>
@@ -1220,9 +1253,9 @@ const Dashboard = () => {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-            </div>
-          </CardContent>
-        </Card>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </>
       )}
@@ -1246,8 +1279,8 @@ const Dashboard = () => {
                   <Plus className="h-4 w-4" />
                   Add Stock
                 </Button>
-          </CardHeader>
-          <CardContent>
+              </CardHeader>
+              <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -1391,10 +1424,10 @@ const Dashboard = () => {
                   >
                     View Larger Chart
                   </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </>
       )}
       
@@ -1417,8 +1450,8 @@ const Dashboard = () => {
                   <Plus className="h-4 w-4" />
                   Add Cash Account
                 </Button>
-          </CardHeader>
-          <CardContent>
+              </CardHeader>
+              <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -1455,12 +1488,12 @@ const Dashboard = () => {
                       </tr>
                     </tbody>
                   </table>
-            </div>
-          </CardContent>
-        </Card>
-        
+                </div>
+              </CardContent>
+            </Card>
+            
             <Card className="shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader>
+              <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span>Cash Distribution</span>
                   <Button 
@@ -1472,10 +1505,10 @@ const Dashboard = () => {
                     <Maximize2 className="h-4 w-4" />
                   </Button>
                 </CardTitle>
-          </CardHeader>
-          <CardContent>
+              </CardHeader>
+              <CardContent>
                 <div className="h-64 md:h-80 lg:h-72 w-full relative" ref={cashTabChartRef}>
-              <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%">
                     <PieChart margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                       <Pie
                         data={cashPieData}
@@ -1523,40 +1556,40 @@ const Dashboard = () => {
                         }}
                       />
                     </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute top-2 right-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Chart Actions</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => handleDownloadChart(cashTabChartRef, 'cash-tab-distribution.png')}>
-                      <Image className="mr-2 h-4 w-4" />
-                      Save as PNG
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleDownloadChart(cashTabChartRef, 'cash-tab-distribution.png', 'clipboard')}>
-                      <Copy className="mr-2 h-4 w-4" />
-                      Copy to Clipboard
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handlePrintChart(cashTabChartRef, 'Cash Distribution')}>
-                      <Printer className="mr-2 h-4 w-4" />
-                      Print Chart
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setEnlargedChart('cash')}>
-                      <Maximize2 className="mr-2 h-4 w-4" />
-                      View Larger
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                  </ResponsiveContainer>
+                  <div className="absolute top-2 right-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Chart Actions</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleDownloadChart(cashTabChartRef, 'cash-tab-distribution.png')}>
+                          <Image className="mr-2 h-4 w-4" />
+                          Save as PNG
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDownloadChart(cashTabChartRef, 'cash-tab-distribution.png', 'clipboard')}>
+                          <Copy className="mr-2 h-4 w-4" />
+                          Copy to Clipboard
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handlePrintChart(cashTabChartRef, 'Cash Distribution')}>
+                          <Printer className="mr-2 h-4 w-4" />
+                          Print Chart
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setEnlargedChart('cash')}>
+                          <Maximize2 className="mr-2 h-4 w-4" />
+                          View Larger
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </>
       )}
 
@@ -1747,11 +1780,61 @@ const Dashboard = () => {
                 className="col-span-3"
                 type="number"
                 step="0.01"
-        />
-      </div>
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button onClick={handleCashUpdate}>Update Balance</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* POS Banks Selection Modal */}
+      <Dialog open={posBankSelectOpen} onOpenChange={setPosBankSelectOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Select Banks for POS Calculation</DialogTitle>
+            <DialogDescription>
+              Choose which banks should be included in the POS cash calculation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+              {banks.map((bank) => (
+                <div key={bank.name} className="flex items-center space-x-2">
+                  <Checkbox 
+                    id={`bank-${bank.name}`} 
+                    checked={posSettings?.posActiveBanks?.includes(bank.name)}
+                    onCheckedChange={(checked: boolean) => {
+                      const currentBanks = posSettings?.posActiveBanks || [];
+                      let newBanks;
+                      
+                      if (checked) {
+                        newBanks = [...currentBanks, bank.name];
+                      } else {
+                        newBanks = currentBanks.filter(b => b !== bank.name);
+                      }
+                      
+                      updatePosSettings({
+                        ...posSettings,
+                        posActiveBanks: newBanks
+                      });
+                    }}
+                  />
+                  <Label htmlFor={`bank-${bank.name}`} className="text-sm cursor-pointer">
+                    {bank.name}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => {
+              handleRefresh();
+              setPosBankSelectOpen(false);
+            }}>
+              Save & Update
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
