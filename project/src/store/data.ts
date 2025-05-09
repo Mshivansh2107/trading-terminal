@@ -53,6 +53,42 @@ export const settingsAtom = atomWithStorage('appSettings', {
   lastUsdtPriceUpdate: null as number | null
 });
 
+// POS Settings atom
+export const posSettingsAtom = atomWithStorage('posSettings', {
+  posActiveBanks: [] as string[]
+});
+
+export const updatePosSettingsAtom = atom(
+  null,
+  async (get, set, updates: { posActiveBanks: string[] }) => {
+    try {
+      const authState = get(authStateAtom);
+      
+      // Only save to Supabase if user is authenticated
+      if (authState.isAuthenticated) {
+        const { error } = await supabase
+          .from('pos_settings')
+          .upsert({
+            user_id: authState.user?.id,
+            settings: updates
+          }, {
+            onConflict: 'user_id'
+          });
+          
+        if (error) {
+          console.error('Error updating POS settings:', error);
+        }
+      }
+      
+      // Update local state regardless of Supabase result
+      set(posSettingsAtom, updates);
+      
+    } catch (error) {
+      console.error('Failed to update POS settings:', error);
+    }
+  }
+);
+
 // Add a new atom for syncing settings with backend
 export const syncSettingsAtom = atom(
   null,
@@ -173,6 +209,8 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   const expenses = get(expensesAtom);
   const settings = get(settingsAtom);
   const availablePlatforms = get(platformsAtom);
+  const availableBanks = get(banksAtom);
+  const posSettings = get(posSettingsAtom);
   
   // Get filter functions and date range
   const filterByDate = get(filterByDateAtom);
@@ -455,25 +493,12 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   };
   
   // Use dynamic banks from banksAtom to generate cash list
-  const availableBanks = get(banksAtom);
-  
-  // Get bank names from database only
-  const bankNames: Bank[] = availableBanks.length > 0 
-    ? availableBanks.filter(bank => bank.isActive).map(bank => bank.name as Bank)
+  const cashList = availableBanks.length > 0
+    ? availableBanks.filter(bank => bank.isActive).map(bank => ({
+      bank: bank.name as Bank,
+      amount: calculateAdjustedBankBalance(bank.name as Bank)
+    }))
     : []; // No default banks - wait for backend data
-  
-  // Define banks that should not be shown in UI or included in calculations
-  const excludedBanks: string[] = ['ADJUSTMENT'];
-  
-  // Generate cash list for all banks except excluded ones
-  const cashList = bankNames
-    .filter(bankName => !excludedBanks.includes(bankName))
-    .map(bankName => {
-      return { 
-        bank: bankName, 
-        amount: calculateAdjustedBankBalance(bankName) 
-      };
-    });
   
   // Get current USDT price for stock value calculation
   const currentUsdPrice = settings.currentUsdPrice || 0;
@@ -539,6 +564,9 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   const buyPriceRangeAlt = 0; // This would ideally come from a separate calculation
   const requiredMargin = settings.requiredMargin;
   
+  // Define banks that should not be shown in UI or included in calculations
+  const excludedBanks: string[] = ['ADJUSTMENT'];
+  
   // Calculate net cash after sales started in POS
   // Sum all bank balances, except those that can be manually edited
   // Banks that are used for manual adjustments should be excluded
@@ -551,8 +579,13 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
     // Add any other banks here that have been manually added/adjusted in your system
   ];
   
+  // Filter banks based on posActiveBanks setting if available, otherwise use all valid banks
+  const posActiveBankNames = posSettings?.posActiveBanks?.length > 0 
+    ? posSettings.posActiveBanks 
+    : cashList.map(cash => cash.bank).filter(bank => !manuallyEditableBanks.includes(bank));
+  
   const netCashAfterSales = cashList
-    .filter(cash => !manuallyEditableBanks.includes(cash.bank))
+    .filter(cash => posActiveBankNames.includes(cash.bank))
     .reduce((sum, cash) => sum + cash.amount, 0);
   
   return {
@@ -1348,6 +1381,50 @@ export const refreshDataAtom = atom(
       // Fetch banks and platforms
       set(fetchBanksAtom);
       set(fetchPlatformsAtom);
+      
+      // Fetch POS settings
+      try {
+        const { data: posSettingsData, error: posSettingsError } = await supabase
+          .from('pos_settings')
+          .select('settings')
+          .eq('user_id', authState.user?.id)
+          .single();
+          
+        if (posSettingsError && posSettingsError.code !== 'PGRST116') {
+          // PGRST116 is "Results contain 0 rows" which is fine for new users
+          console.error('Error fetching POS settings:', posSettingsError);
+        }
+        
+        if (posSettingsData?.settings) {
+          set(posSettingsAtom, posSettingsData.settings);
+        } else {
+          // Get all active banks for new users
+          const { data: banksData } = await supabase
+            .from('banks')
+            .select('name')
+            .eq('is_active', true);
+            
+          // Default: all active banks selected
+          const defaultSettings = {
+            posActiveBanks: banksData?.map(bank => bank.name) || []
+          };
+          
+          // Set default and save to backend
+          set(posSettingsAtom, defaultSettings);
+          
+          // Only save to backend if we have banks data
+          if (banksData && banksData.length > 0) {
+            await supabase
+              .from('pos_settings')
+              .upsert({
+                user_id: authState.user?.id,
+                settings: defaultSettings
+              });
+          }
+        }
+      } catch (error) {
+        console.error('Error handling POS settings:', error);
+      }
       
       // Fetch sales
       const { data: salesData, error: salesError } = await supabase
