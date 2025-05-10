@@ -184,8 +184,12 @@ export const resetPasswordAtom = atom(
     set(authStateAtom, { ...get(authStateAtom), isLoading: true, error: null });
     
     try {
+      // Use the current origin or the production domain if available
+      const redirectUrl = `${window.location.origin}/reset-password`;
+      console.log('Reset password redirect URL:', redirectUrl);
+      
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: redirectUrl,
       });
       
       if (error) throw error;
@@ -204,6 +208,58 @@ export const resetPasswordAtom = atom(
         ...get(authStateAtom),
         isLoading: false,
       });
+    }
+  }
+);
+
+// Add verify OTP for password reset
+export const verifyOtpAtom = atom(
+  null,
+  async (get, set, { email, token, password }: { email: string; token: string; password?: string }) => {
+    set(authStateAtom, { ...get(authStateAtom), isLoading: true, error: null });
+    
+    try {
+      // First verify and get session
+      const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'recovery'
+      });
+      
+      if (verifyError) throw verifyError;
+      
+      // If password is provided, update it immediately
+      if (password && verifyData.session) {
+        const { error: updateError } = await supabase.auth.updateUser({
+          password
+        });
+        
+        if (updateError) throw updateError;
+        
+        // Update auth state with new session
+        set(authStateAtom, {
+          user: verifyData.user,
+          session: verifyData.session,
+          isLoading: false,
+          isAuthenticated: true,
+          isAdmin: verifyData.user ? await checkIsUserAdmin(verifyData.user.id) : false,
+          error: null
+        });
+        
+        return { success: true, session: verifyData.session };
+      }
+      
+      // If no password, just verify the token and return success
+      return { success: true, session: verifyData.session };
+      
+    } catch (error) {
+      set(authStateAtom, {
+        ...get(authStateAtom),
+        isLoading: false,
+        error: (error as Error).message,
+      });
+      
+      return { success: false, error: (error as Error).message };
     }
   }
 ); 

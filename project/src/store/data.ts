@@ -1921,93 +1921,116 @@ export const updateCashBalanceAtom = atom(
     const sales = get(salesAtom);
     const purchases = get(purchasesAtom);
     const expenses = get(expensesAtom);
+    const bankTransfers = get(bankTransfersAtom);
     const authState = get(authStateAtom);
     
     try {
       console.log('Starting cash balance update for bank:', bank);
       
-      // Calculate current bank balance
+      // Calculate current bank balance including ALL transactions
       const currentAmount = 
         sales.filter(s => s.bank === bank).reduce((sum, s) => sum + s.totalPrice, 0) -
         purchases.filter(p => p.bank === bank).reduce((sum, p) => sum + p.totalPrice, 0) +
         expenses.filter(e => e.bank === bank && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
         expenses.filter(e => e.bank === bank && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0);
+
+      // Calculate transfers in (money received)
+      const transfersIn = bankTransfers
+        .filter(transfer => transfer.toBank === bank && transfer.fromBank !== 'ADJUSTMENT')
+        .reduce((sum, transfer) => sum + transfer.amount, 0);
       
-      console.log('Current bank amount:', currentAmount, 'Target amount:', amount);
+      // Calculate transfers out (money sent)
+      const transfersOut = bankTransfers
+        .filter(transfer => transfer.fromBank === bank && transfer.toBank !== 'ADJUSTMENT')
+        .reduce((sum, transfer) => sum + transfer.amount, 0);
+      
+      // Handle special ADJUSTMENT transfers
+      const adjustmentTransfersIn = bankTransfers
+        .filter(transfer => transfer.fromBank === 'ADJUSTMENT' && transfer.toBank === bank)
+        .reduce((sum, transfer) => sum + transfer.amount, 0);
+      
+      const adjustmentTransfersOut = bankTransfers
+        .filter(transfer => transfer.fromBank === bank && transfer.toBank === 'ADJUSTMENT')
+        .reduce((sum, transfer) => sum + transfer.amount, 0);
+
+      // Calculate total current balance with all transactions
+      const totalCurrentBalance = currentAmount + transfersIn - transfersOut + adjustmentTransfersIn - adjustmentTransfersOut;
+      
+      console.log('Current bank amount (with transfers):', totalCurrentBalance, 'Target amount:', amount);
       
       // Calculate the difference needed to reach the target amount
-      const difference = amount - currentAmount;
+      const difference = amount - totalCurrentBalance;
       console.log('Difference to adjust:', difference);
       
       if (difference === 0) {
         console.log('No adjustment needed, amounts already match');
         return; // No adjustment needed
       }
+
+      // First, reset any previous adjustment transfers by removing them
+      // (This is the key to fixing the issue - we'll clear previous adjustment entries first)
+      const { error: deleteError } = await supabase
+        .from('bank_transfers')
+        .delete()
+        .or(`and(from_bank.eq.ADJUSTMENT,to_bank.eq.${bank}), and(from_bank.eq.${bank},to_bank.eq.ADJUSTMENT)`);
       
-      // Use type assertion to treat the bank string as a valid Bank type
-      // Assuming the bank parameter is one of the valid Bank types
-      const validBank = bank as Bank;
+      if (deleteError) {
+        console.error('Error clearing previous adjustment transfers:', deleteError);
+        // Continue despite error, we'll create a new adjustment
+      }
+        
+      // Also remove them from local state
+      set(bankTransfersAtom, bankTransfers.filter(t => 
+        !((t.fromBank === 'ADJUSTMENT' && t.toBank === bank) || 
+          (t.fromBank === bank && t.toBank === 'ADJUSTMENT'))
+      ));
       
-      // Create an expense/income entry based on the difference
-      const expenseWithId: ExpenseEntry = {
+      // Create a bank transfer to adjust the balance
+      const transferWithId: BankTransferEntry = {
         id: crypto.randomUUID(),
         createdAt: new Date(),
-        bank: validBank,
+        fromBank: difference < 0 ? bank as Bank : 'ADJUSTMENT' as Bank,
+        fromAccount: 'Main',
+        toBank: difference < 0 ? 'ADJUSTMENT' as Bank : bank as Bank,
+        toAccount: 'Main',
         amount: Math.abs(difference),
-        type: difference > 0 ? 'income' : 'expense',
-        category: 'Manual Adjustment',
-        description: `Manual adjustment to set ${bank} balance to ${amount}`,
+        reference: `Manual balance adjustment to set ${bank} balance to ${amount}`,
         createdBy: authState.user?.email || 'Unknown user'
       };
       
-      console.log('Expense/income record created:', expenseWithId);
+      console.log('Bank transfer adjustment created:', transferWithId);
       
       // Update in local storage
-      set(expensesAtom, [...expenses, expenseWithId]);
-      console.log('Local state updated with new expense/income');
+      set(bankTransfersAtom, prevTransfers => [...prevTransfers, transferWithId]);
+      console.log('Local state updated with new transfer');
       
       // Save to Supabase
       console.log('Saving to Supabase...');
       
-      const supabaseExpenseData = {
-        id: expenseWithId.id,
-        bank: expenseWithId.bank,
-        amount: expenseWithId.amount,
-        type: expenseWithId.type,
-        category: expenseWithId.category,
-        description: expenseWithId.description,
-        created_at: expenseWithId.createdAt.toISOString(),
-        user_id: authState.user?.id || null,
-        username: authState.user?.email || null
-      };
-      
-      console.log('Expense data to save:', supabaseExpenseData);
-      
       const { error } = await supabase
-        .from('expenses')
-        .insert(supabaseExpenseData);
+        .from('bank_transfers')
+        .insert({
+          id: transferWithId.id,
+          from_bank: transferWithId.fromBank,
+          from_account: transferWithId.fromAccount,
+          to_bank: transferWithId.toBank,
+          to_account: transferWithId.toAccount,
+          amount: transferWithId.amount,
+          reference: transferWithId.reference,
+          created_at: transferWithId.createdAt.toISOString(),
+          user_id: authState.user?.id || null,
+          username: authState.user?.email || null,
+          created_by: transferWithId.createdBy
+        });
       
       if (error) {
-        console.error('Error saving cash adjustment to Supabase:', error);
+        console.error('Error saving bank transfer adjustment to Supabase:', error);
         throw error;
       }
       
-      console.log('Cash adjustment successfully saved to Supabase');
+      console.log('Bank transfer adjustment successfully saved to Supabase');
       
-      // Verify the expense was saved by fetching the record
-      const { data: verificationData, error: verificationError } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('id', expenseWithId.id)
-        .single();
-        
-      if (verificationError) {
-        console.error('Verification failed, expense may not be saved:', verificationError);
-      } else {
-        console.log('Verified expense was saved:', verificationData);
-      }
-      
-      return expenseWithId;
+      return transferWithId;
     } catch (error) {
       console.error('Error adjusting cash balance:', error);
       throw error;

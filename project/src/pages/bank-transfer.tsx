@@ -6,11 +6,13 @@ import DataTable from '../components/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import FormField from '../components/layout/form-field';
-import { PlusCircle, PencilIcon, TrashIcon } from 'lucide-react';
+import { PlusCircle, PencilIcon, TrashIcon, EyeOff } from 'lucide-react';
 import EditTransactionModal from '../components/edit-transaction-modal';
 import { BankTransferEntry } from '../types';
 import DateRangeFilter from '../components/date-range-filter';
 import { filterByDateAtom, dateRangeAtom } from '../store/filters';
+import { Checkbox } from '../components/ui/checkbox';
+import { Label } from '../components/ui/label';
 
 const BankTransfer = () => {
   const [bankTransfers] = useAtom(bankTransfersAtom);
@@ -23,6 +25,7 @@ const BankTransfer = () => {
   const [banks] = useAtom(banksAtom);
   const [filterByDate] = useAtom(filterByDateAtom);
   const [dateRange] = useAtom(dateRangeAtom);
+  const [hideAdjustments, setHideAdjustments] = useState(false);
   
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -175,8 +178,20 @@ const BankTransfer = () => {
 
   // Filter bank transfers data by date range
   const filteredBankTransfers = useMemo(() => {
-    return filterByDate(bankTransfers);
-  }, [filterByDate, bankTransfers, dateRange]);
+    // First filter by date
+    let filtered = filterByDate(bankTransfers);
+    
+    // Then filter out adjustment entries if option is enabled
+    if (hideAdjustments) {
+      filtered = filtered.filter(transfer => 
+        transfer.fromBank !== 'ADJUSTMENT' && 
+        transfer.toBank !== 'ADJUSTMENT' &&
+        !transfer.reference?.includes('Manual balance adjustment')
+      );
+    }
+    
+    return filtered;
+  }, [filterByDate, bankTransfers, dateRange, hideAdjustments]);
 
   return (
     <div className="p-4 md:p-6">
@@ -260,6 +275,22 @@ const BankTransfer = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <div className="lg:col-span-2 bg-white rounded-lg shadow">
           <div className="p-4">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="hideAdjustments" 
+                  checked={hideAdjustments} 
+                  onCheckedChange={(checked) => setHideAdjustments(!!checked)} 
+                />
+                <Label 
+                  htmlFor="hideAdjustments"
+                  className="text-sm font-medium flex items-center cursor-pointer"
+                >
+                  <EyeOff className="h-3.5 w-3.5 mr-1 text-gray-500" />
+                  Hide adjustment entries
+                </Label>
+              </div>
+            </div>
             <DataTable 
               data={filteredBankTransfers} 
               columns={columns}

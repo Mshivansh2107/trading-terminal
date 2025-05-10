@@ -159,7 +159,7 @@ const Login = () => {
                     <button 
                       type="button" 
                       className="text-sm text-blue-600 hover:text-blue-800"
-                      onClick={() => setForgotPasswordMode(true)}
+                      onClick={() => navigate('/reset-password')}
                     >
                       Forgot password?
                     </button>
