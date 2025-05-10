@@ -8,7 +8,23 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Determine the site URL for redirection
+const siteUrl = typeof window !== 'undefined' 
+  ? window.location.origin 
+  : 'https://trading-terminal-silk.vercel.app';
+
+// Create the Supabase client with additional options
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    // Set the redirect URL to the current site
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce',
+    // Explicitly set the site URL for redirects
+    redirectTo: `${siteUrl}/reset-password`,
+  },
+});
 
 // Test the connection
 supabase.from('sales').select('*', { count: 'exact' })

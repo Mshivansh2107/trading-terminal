@@ -196,6 +196,20 @@ const AdminUsers = () => {
       setIsDeleting(true);
       setError(null);
       
+      // First, try to delete from Supabase Auth - do this through an RPC function
+      const { data: authDeleteData, error: authDeleteError } = await supabase.rpc(
+        'admin_delete_user',
+        { user_id: userToDelete.id }
+      );
+      
+      if (authDeleteError) {
+        console.error('Error deleting user from auth:', authDeleteError);
+        // Continue with deletion from users table even if auth deletion fails
+        // This could happen if the RPC doesn't exist yet
+      } else {
+        console.log('User deleted from auth system:', authDeleteData);
+      }
+      
       // Delete the user from our users table
       const { error: deleteError } = await supabase
         .from('users')
@@ -203,10 +217,6 @@ const AdminUsers = () => {
         .eq('id', userToDelete.id);
       
       if (deleteError) throw deleteError;
-      
-      // Note: Deleting from auth.users would require admin access
-      // We can't do this directly from the client for security reasons
-      // This would typically be handled by a secure server-side function
       
       // Close the delete dialog and refresh the user list
       setUserToDelete(null);

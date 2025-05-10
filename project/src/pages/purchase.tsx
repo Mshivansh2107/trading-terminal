@@ -167,7 +167,7 @@ const Purchase = () => {
       bank: formData.get('bank') as Bank,
       orderType: 'Buy' as const,
       assetType: formData.get('assetType') as string,
-      fiatType: formData.get('fiatType') as 'INR' | 'USDT',
+      fiatType: 'USDT' as 'INR' | 'USDT', // Default to USDT
       totalPrice: parseFloat(formData.get('totalPrice') as string),
       price: parseFloat(formData.get('price') as string),
       quantity: parseFloat(formData.get('quantity') as string),
@@ -365,17 +365,6 @@ const Purchase = () => {
                     inputProps={{ 
                       placeholder: "Enter Asset Type"
                     }}
-                  />
-                  
-                  <FormField
-                    label="Fiat Type"
-                    name="fiatType"
-                    type="select"
-                    required
-                    options={[
-                      { value: 'USDT', label: 'USDT' },
-                      { value: 'INR', label: 'INR' }
-                    ]}
                   />
                   
                   <FormField
