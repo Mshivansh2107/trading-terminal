@@ -299,6 +299,8 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
   // Similarly calculate cash balances up to the filter end date
   const calculateAdjustedBankBalance = (bank: Bank) => {
     if (!isFilterActive) {
+      console.log(`Calculating balance for bank: ${bank}`);
+      
       // Get all bank transfers
       const bankTransfers = get(bankTransfersAtom);
       
@@ -325,11 +327,27 @@ export const dashboardDataAtom = atom<DashboardData>((get) => {
         .filter(transfer => transfer.fromBank === bank && transfer.toBank === 'ADJUSTMENT')
         .reduce((sum, transfer) => sum + transfer.amount, 0);
       
+      // Calculate sales, purchases, income, and expenses
+      const salesTotal = sales.filter(s => s.bank === bank).reduce((sum, s) => sum + s.totalPrice, 0);
+      const purchasesTotal = purchases.filter(p => p.bank === bank).reduce((sum, p) => sum + p.totalPrice, 0);
+      const incomeTotal = expenses.filter(e => e.bank === bank && e.type === 'income').reduce((sum, e) => sum + e.amount, 0);
+      const expensesTotal = expenses.filter(e => e.bank === bank && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0);
+      
+      // Log the components of the calculation
+      console.log(`Bank ${bank} calculation components:`, {
+        salesTotal,
+        purchasesTotal,
+        incomeTotal,
+        expensesTotal,
+        transfersIn,
+        transfersOut,
+        adjustmentTransfersIn,
+        adjustmentTransfersOut,
+        incomeExpenses: expenses.filter(e => e.bank === bank)
+      });
+      
       return (
-        sales.filter(s => s.bank === bank).reduce((sum, s) => sum + s.totalPrice, 0) -
-        purchases.filter(p => p.bank === bank).reduce((sum, p) => sum + p.totalPrice, 0) +
-        expenses.filter(e => e.bank === bank && e.type === 'income').reduce((sum, e) => sum + e.amount, 0) -
-        expenses.filter(e => e.bank === bank && e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) +
+        salesTotal - purchasesTotal + incomeTotal - expensesTotal +
         transfersIn - transfersOut + adjustmentTransfersIn - adjustmentTransfersOut
       );
     } else {
@@ -1203,12 +1221,14 @@ export const addExpenseAtom = atom(
   null,
   async (get, set, expenseData: Omit<ExpenseEntry, 'id' | 'createdAt'>) => {
     const expenses = get(expensesAtom);
+    const authState = get(authStateAtom);
     
     // Create a complete expense object with id and createdAt
     const newExpense: ExpenseEntry = {
       id: crypto.randomUUID(),
       createdAt: new Date(),
-      ...expenseData
+      ...expenseData,
+      createdBy: authState.user?.email || 'Unknown user'
     };
     
     // Add to local state
@@ -1220,6 +1240,8 @@ export const addExpenseAtom = atom(
     
     // Save to Supabase
     try {
+      console.log('Saving expense to Supabase:', newExpense);
+      
       const { error } = await supabase
         .from('expenses')
         .insert({
@@ -1229,18 +1251,20 @@ export const addExpenseAtom = atom(
           type: newExpense.type,
           category: newExpense.category,
           description: newExpense.description,
-          created_at: newExpense.createdAt
+          created_at: newExpense.createdAt.toISOString(),
+          user_id: authState.user?.id || null,
+          username: authState.user?.email || null,
+          created_by: newExpense.createdBy
         });
 
       if (error) {
         console.error('Error adding expense:', error);
+      } else {
+        console.log('Successfully saved expense to Supabase');
       }
     } catch (error) {
       console.error('Error adding expense:', error);
     }
-
-    // Save to local storage
-    localStorage.setItem('expenses', JSON.stringify(get(expensesAtom)));
   }
 );
 
@@ -1542,14 +1566,17 @@ export const refreshDataAtom = atom(
       }
 
       // Fetch expenses
+      console.log('Fetching expenses from Supabase...');
       const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
-        .select('*')
+        .select('*, edited_by, updated_at')
         .order('created_at', { ascending: false });
       
       if (expensesError) {
         console.error('Error fetching expenses:', expensesError);
       } else {
+        console.log('Fetched expenses from Supabase:', expensesData);
+        
         // Transform to local format
         const formattedExpenses = expensesData.map(expense => ({
           id: expense.id,
@@ -1559,9 +1586,12 @@ export const refreshDataAtom = atom(
           category: expense.category,
           description: expense.description,
           createdAt: new Date(expense.created_at),
+          updatedAt: expense.updated_at ? new Date(expense.updated_at) : undefined,
+          editedBy: expense.edited_by || undefined,
           createdBy: expense.created_by || expense.username || 'Unknown user'
         }));
         
+        console.log('Formatted expenses:', formattedExpenses);
         set(expensesAtom, formattedExpenses);
       }
     } catch (error) {
@@ -1775,10 +1805,24 @@ export const updateExpenseAtom = atom(
   null,
   async (get, set, expense: ExpenseEntry) => {
     const expenses = get(expensesAtom);
+    const authState = get(authStateAtom);
+    
+    // Add updatedAt and editedBy fields
+    const updatedExpense = {
+      ...expense,
+      updatedAt: new Date(),
+      editedBy: authState.user?.email || 'Unknown user'
+    };
+    
+    // Update in local state
     const updatedExpenses = expenses.map((e) => 
-      e.id === expense.id ? expense : e
+      e.id === expense.id ? updatedExpense : e
     );
     set(expensesAtom, updatedExpenses);
+    
+    // Increment data version to trigger UI updates
+    const currentVersion = get(dataVersionAtom);
+    set(dataVersionAtom, currentVersion + 1);
     
     try {
       // Update in Supabase
@@ -1790,7 +1834,9 @@ export const updateExpenseAtom = atom(
           type: expense.type,
           category: expense.category,
           description: expense.description,
-          created_at: expense.createdAt,
+          edited_by: authState.user?.email || 'Unknown user',
+          updated_at: new Date().toISOString()
+          // Don't update created_at - keep the original creation date
         })
         .eq('id', expense.id);
 
@@ -1958,15 +2004,6 @@ export const updateCashBalanceAtom = atom(
       
       console.log('Current bank amount (with transfers):', totalCurrentBalance, 'Target amount:', amount);
       
-      // Calculate the difference needed to reach the target amount
-      const difference = amount - totalCurrentBalance;
-      console.log('Difference to adjust:', difference);
-      
-      if (difference === 0) {
-        console.log('No adjustment needed, amounts already match');
-        return; // No adjustment needed
-      }
-
       // First, reset any previous adjustment transfers by removing them
       // (This is the key to fixing the issue - we'll clear previous adjustment entries first)
       const { error: deleteError } = await supabase
@@ -1984,6 +2021,20 @@ export const updateCashBalanceAtom = atom(
         !((t.fromBank === 'ADJUSTMENT' && t.toBank === bank) || 
           (t.fromBank === bank && t.toBank === 'ADJUSTMENT'))
       ));
+      
+      // IMPORTANT: Recalculate the current balance WITHOUT any adjustment transfers
+      // This ensures we're creating a transfer for the full amount needed
+      const balanceWithoutAdjustments = currentAmount + transfersIn - transfersOut;
+      
+      // Calculate the difference needed to reach the target amount based on balance without adjustments
+      const difference = amount - balanceWithoutAdjustments;
+      console.log('Balance without adjustments:', balanceWithoutAdjustments);
+      console.log('Difference to adjust:', difference);
+      
+      if (difference === 0) {
+        console.log('No adjustment needed, amounts already match');
+        return; // No adjustment needed
+      }
       
       // Create a bank transfer to adjust the balance
       const transferWithId: BankTransferEntry = {
